@@ -19,6 +19,29 @@ public sealed record AutomationState
 
     /// <summary>Quantos dominios a lista de bloqueio carregou.</summary>
     public required int BlocklistSize { get; init; }
+
+    /// <summary>Favoritos, historico e downloads, como a biblioteca os ve.</summary>
+    public required AutomationLibrary Library { get; init; }
+}
+
+/// <summary>Resumo da biblioteca para os testes.</summary>
+public sealed record AutomationLibrary
+{
+    public required int BookmarkCount { get; init; }
+    public required int HistoryCount { get; init; }
+    public required int DownloadCount { get; init; }
+
+    /// <summary>Verdadeiro se a URL da aba ativa esta nos favoritos.</summary>
+    public required bool ActiveIsBookmarked { get; init; }
+
+    /// <summary>Zoom aplicado a aba ativa.</summary>
+    public required double ActiveZoom { get; init; }
+
+    /// <summary>Titulos dos favoritos, do primeiro ao ultimo.</summary>
+    public required IReadOnlyList<string> BookmarkTitles { get; init; }
+
+    /// <summary>URLs do historico, do mais recente para o mais antigo.</summary>
+    public required IReadOnlyList<string> HistoryUrls { get; init; }
 }
 
 /// <summary>Uma aba, como a automacao a enxerga.</summary>

@@ -52,6 +52,17 @@ public sealed class AppPaths
         return new AppPaths(root, isDisposable: true);
     }
 
+    /// <summary>
+    /// Pasta de teste escolhida pelo chamador, que sobrevive ao fechamento do
+    /// app. E assim que o teste de restauracao de sessao consegue abrir, fechar
+    /// e reabrir sobre os mesmos dados.
+    /// </summary>
+    public static AppPaths ForTestFolder(string root)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(root);
+        return new AppPaths(root, isDisposable: false);
+    }
+
     public void EnsureCreated()
     {
         Directory.CreateDirectory(RootFolder);

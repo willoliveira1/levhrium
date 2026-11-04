@@ -21,6 +21,9 @@ public sealed class LaunchOptions
     /// <summary>Arquivo hosts a somar a lista de bloqueio embutida.</summary>
     public const string BlocklistFlag = "--blocklist";
 
+    /// <summary>Pasta de dados fixa; so vale em --test-mode.</summary>
+    public const string TestDataDirFlag = "--test-data-dir";
+
     private LaunchOptions(
         bool testMode,
         string? initialUrl,
@@ -28,7 +31,8 @@ public sealed class LaunchOptions
         int cdpPort,
         string? handshakeFilePath,
         TimeSpan idleThreshold,
-        string? blocklistPath)
+        string? blocklistPath,
+        string? testDataDir)
     {
         TestMode = testMode;
         InitialUrl = initialUrl;
@@ -37,6 +41,7 @@ public sealed class LaunchOptions
         HandshakeFilePath = handshakeFilePath;
         IdleThreshold = idleThreshold;
         BlocklistPath = blocklistPath;
+        TestDataDir = testDataDir;
     }
 
     public bool TestMode { get; }
@@ -68,11 +73,23 @@ public sealed class LaunchOptions
     /// </summary>
     public string? BlocklistPath { get; }
 
+    /// <summary>Pasta de dados fixa para testes; ignorada fora de --test-mode.</summary>
+    public string? TestDataDir { get; }
+
     /// <summary>Nome do named pipe de automacao desta instancia.</summary>
     public string AutomationPipeName => $"{AppPaths.ProductName}-test-{InstanceId}";
 
-    public AppPaths ResolvePaths() =>
-        TestMode ? AppPaths.ForTests(InstanceId) : AppPaths.ForNormalUse();
+    public AppPaths ResolvePaths()
+    {
+        if (!TestMode)
+        {
+            return AppPaths.ForNormalUse();
+        }
+
+        return TestDataDir is { Length: > 0 } fixedFolder
+            ? AppPaths.ForTestFolder(fixedFolder)
+            : AppPaths.ForTests(InstanceId);
+    }
 
     public static LaunchOptions Parse(IReadOnlyList<string> args)
     {
@@ -83,6 +100,7 @@ public sealed class LaunchOptions
         string? handshake = null;
         var idleThreshold = HibernationPolicy.DefaultIdleThreshold;
         string? blocklist = null;
+        string? testDataDir = null;
 
         for (var i = 0; i < args.Count; i++)
         {
@@ -102,6 +120,10 @@ public sealed class LaunchOptions
             {
                 blocklist = args[++i];
             }
+            else if (string.Equals(args[i], TestDataDirFlag, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
+            {
+                testDataDir = args[++i];
+            }
             else if (string.Equals(args[i], HibernateAfterFlag, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count
                      && double.TryParse(args[++i], System.Globalization.CultureInfo.InvariantCulture, out var seconds))
             {
@@ -119,8 +141,8 @@ public sealed class LaunchOptions
 #endif
 
         return testMode
-            ? new LaunchOptions(true, url, Guid.NewGuid().ToString("n")[..12], FindFreePort(), handshake, idleThreshold, blocklist)
-            : new LaunchOptions(false, url, string.Empty, 0, handshakeFilePath: null, idleThreshold, blocklist);
+            ? new LaunchOptions(true, url, Guid.NewGuid().ToString("n")[..12], FindFreePort(), handshake, idleThreshold, blocklist, testDataDir)
+            : new LaunchOptions(false, url, string.Empty, 0, handshakeFilePath: null, idleThreshold, blocklist, testDataDir);
     }
 
     /// <summary>

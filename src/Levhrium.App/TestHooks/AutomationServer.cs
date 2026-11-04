@@ -201,6 +201,23 @@ internal sealed class AutomationServer : IDisposable
                     await _target.HibernateTickAsync().ConfigureAwait(false);
                     return Ok();
 
+                case "bookmark-toggle":
+                    await _target.ToggleBookmarkAsync().ConfigureAwait(false);
+                    return Ok();
+
+                case "zoom":
+                    if (argument.Length == 0)
+                    {
+                        return Error("zoom exige in, out ou reset");
+                    }
+
+                    await _target.ZoomAsync(argument).ConfigureAwait(false);
+                    return Ok();
+
+                case "save-state":
+                    await _target.SaveStateAsync().ConfigureAwait(false);
+                    return Ok();
+
                 case "hotkey":
                     if (argument.Length == 0)
                     {

@@ -19,6 +19,10 @@ internal sealed class MainForm : Form, IAutomationTarget
     private readonly HibernationPolicy _hibernationPolicy;
     private readonly HibernationService _hibernation;
     private readonly DomainBlocklist _blocklist;
+    private readonly StateStore _stateStore;
+    private readonly Library _library;
+    private readonly System.Windows.Forms.Timer _saveTimer;
+    private readonly BrowserState _restoredState;
     private readonly Dictionary<Guid, BrowserTab> _views = [];
 
     private readonly TabStrip _tabStrip;
@@ -26,6 +30,7 @@ internal sealed class MainForm : Form, IAutomationTarget
     private readonly Button _back;
     private readonly Button _forward;
     private readonly Button _reload;
+    private readonly Button _libraryButton;
     private readonly TextBox _address;
     private readonly Label _blockedIcon;
     private readonly Label _blockedCounter;
@@ -45,6 +50,18 @@ internal sealed class MainForm : Form, IAutomationTarget
         _hibernationPolicy = new HibernationPolicy(options.IdleThreshold);
         _hibernation = new HibernationService(_session, _hibernationPolicy, id => _views.GetValueOrDefault(id));
         _blocklist = DomainBlocklist.LoadOrSeed(options.BlocklistPath ?? paths.BlocklistFile);
+        _stateStore = new StateStore(paths.StateFile);
+        _restoredState = _stateStore.Load();
+        _library = new Library(_restoredState);
+
+        // Grava com atraso: navegar dispara varios eventos seguidos e nao vale
+        // reescrever o arquivo a cada um.
+        _saveTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+        _saveTimer.Tick += (_, _) =>
+        {
+            _saveTimer.Stop();
+            SaveState();
+        };
 
         Text = AppPaths.ProductName;
         BackColor = Theme.WindowBackground;
@@ -57,6 +74,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         _back = CreateToolbarButton("←", "Voltar (Alt+Seta esquerda)");
         _forward = CreateToolbarButton("→", "Avancar (Alt+Seta direita)");
         _reload = CreateToolbarButton("↻", "Recarregar (F5)");
+        _libraryButton = CreateToolbarButton("☰", "Favoritos, historico e downloads");
 
         _address = new TextBox
         {
@@ -110,6 +128,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         _toolbar.Controls.Add(_back);
         _toolbar.Controls.Add(_forward);
         _toolbar.Controls.Add(_reload);
+        _toolbar.Controls.Add(_libraryButton);
         _toolbar.Controls.Add(_address);
         _toolbar.Controls.Add(_blockedIcon);
         _toolbar.Controls.Add(_blockedCounter);
@@ -123,6 +142,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         _back.Click += (_, _) => ActiveView?.GoBack();
         _forward.Click += (_, _) => ActiveView?.GoForward();
         _reload.Click += (_, _) => ActiveView?.Reload();
+        _libraryButton.Click += (_, _) => ShowLibraryMenu();
         _address.KeyDown += OnAddressKeyDown;
         _address.Enter += (_, _) => BeginInvoke(_address.SelectAll);
 
@@ -201,6 +221,33 @@ internal sealed class MainForm : Form, IAutomationTarget
                 ActiveView?.GoForward();
                 return true;
 
+            case Keys.Control | Keys.D:
+                ToggleBookmark();
+                return true;
+
+            case Keys.Control | Keys.H:
+                ShowLibraryMenu(LibrarySection.History);
+                return true;
+
+            case Keys.Control | Keys.J:
+                ShowLibraryMenu(LibrarySection.Downloads);
+                return true;
+
+            case Keys.Control | Keys.Oemplus:
+            case Keys.Control | Keys.Add:
+                StepZoom(1);
+                return true;
+
+            case Keys.Control | Keys.OemMinus:
+            case Keys.Control | Keys.Subtract:
+                StepZoom(-1);
+                return true;
+
+            case Keys.Control | Keys.D0:
+            case Keys.Control | Keys.NumPad0:
+                ResetZoom();
+                return true;
+
             default:
                 return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -210,13 +257,26 @@ internal sealed class MainForm : Form, IAutomationTarget
 
     private async Task InitializeAsync()
     {
-        var startUrl = _options.InitialUrl is { Length: > 0 } requested
-            ? UrlResolver.Resolve(requested, _searchEngine).ToString()
-            : HomeUrl;
+        _session.Containers.Restore(_restoredState.Containers);
+        _session.RestoreClosed(_restoredState.ClosedTabs);
 
         try
         {
-            await OpenTabAsync(ContainerRegistry.DefaultName, startUrl);
+            if (_options.InitialUrl is { Length: > 0 } requested)
+            {
+                // URL pedida na linha de comando tem precedencia sobre a sessao.
+                await OpenTabAsync(
+                    ContainerRegistry.DefaultName,
+                    UrlResolver.Resolve(requested, _searchEngine).ToString());
+            }
+            else if (_restoredState.Tabs.Count > 0)
+            {
+                await RestoreTabsAsync();
+            }
+            else
+            {
+                await OpenTabAsync(ContainerRegistry.DefaultName, HomeUrl);
+            }
         }
         catch (Exception ex)
         {
@@ -233,6 +293,23 @@ internal sealed class MainForm : Form, IAutomationTarget
         _ready.TrySetResult();
     }
 
+    /// <summary>
+    /// Reabre as abas gravadas na ordem e nos containers originais, e volta para
+    /// a aba que estava ativa.
+    /// </summary>
+    private async Task RestoreTabsAsync()
+    {
+        foreach (var saved in _restoredState.Tabs)
+        {
+            var model = await OpenTabAsync(saved.Container, saved.Url, activate: false);
+            model.Title = saved.Title;
+            model.Pinned = saved.Pinned || model.Pinned;
+        }
+
+        _session.Activate(Math.Clamp(_restoredState.ActiveTabIndex, 0, _session.Tabs.Count - 1));
+        _tabStrip.Invalidate();
+    }
+
     private async Task<TabModel> OpenTabAsync(
         string containerName,
         string url,
@@ -247,6 +324,7 @@ internal sealed class MainForm : Form, IAutomationTarget
 
         var view = new BrowserTab(model, _webViewSettings.For(model.Container), _blocklist);
         view.Changed += (_, _) => OnTabContentChanged(model.Id);
+        WireLibraryEvents(view, model.Id);
 
         _views[model.Id] = view;
         _content.Controls.Add(view.View);
@@ -319,6 +397,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         // O modelo ja voltou para a sessao; falta criar a view no mesmo container.
         var view = new BrowserTab(restored, _webViewSettings.For(restored.Container), _blocklist);
         view.Changed += (_, _) => OnTabContentChanged(restored.Id);
+        WireLibraryEvents(view, restored.Id);
 
         _views[restored.Id] = view;
         _content.Controls.Add(view.View);
@@ -561,6 +640,209 @@ internal sealed class MainForm : Form, IAutomationTarget
         _suppressAddressSync = false;
     }
 
+    // ---- Biblioteca: favoritos, historico, downloads e zoom ----
+
+    private enum LibrarySection
+    {
+        Bookmarks,
+        History,
+        Downloads,
+    }
+
+    /// <summary>
+    /// Liga a aba a biblioteca: cada pagina carregada vira historico, o zoom do
+    /// site e reaplicado e os downloads entram na lista.
+    /// </summary>
+    private void WireLibraryEvents(BrowserTab view, Guid id)
+    {
+        view.Navigated += (_, _) =>
+        {
+            _library.RecordVisit(view.Url, view.Title);
+
+            // Zoom e por host: o site reabre no tamanho que voce deixou.
+            var zoom = _library.ZoomFor(view.Url);
+            if (Math.Abs(view.ZoomFactor - zoom) > 0.001)
+            {
+                view.ZoomFactor = zoom;
+            }
+
+            ScheduleSave();
+        };
+
+        view.DownloadStarted += (_, download) =>
+        {
+            _library.RecordDownload(download.Url, download.FilePath);
+            ScheduleSave();
+        };
+
+        view.DownloadCompleted += (_, filePath) =>
+        {
+            _library.MarkDownloadCompleted(filePath);
+            ScheduleSave();
+        };
+
+        _ = id;
+    }
+
+    private void ToggleBookmark()
+    {
+        if (ActiveView is not { } view)
+        {
+            return;
+        }
+
+        _library.ToggleBookmark(view.Url, view.Title);
+        ScheduleSave();
+        SyncToolbar();
+    }
+
+    private void StepZoom(int direction)
+    {
+        if (ActiveView is not { } view)
+        {
+            return;
+        }
+
+        var next = Library.NextZoomStep(view.ZoomFactor, direction);
+        view.ZoomFactor = next;
+        _library.SetZoom(view.Url, next);
+        ScheduleSave();
+    }
+
+    private void ResetZoom()
+    {
+        if (ActiveView is not { } view)
+        {
+            return;
+        }
+
+        view.ZoomFactor = 1.0;
+        _library.SetZoom(view.Url, 1.0);
+        ScheduleSave();
+    }
+
+    /// <summary>
+    /// Menu unico para favoritos, historico e downloads. Um menu custa muito
+    /// menos codigo que uma janela de biblioteca e resolve o mesmo uso.
+    /// </summary>
+    private void ShowLibraryMenu(LibrarySection section = LibrarySection.Bookmarks)
+    {
+        var menu = new ContextMenuStrip
+        {
+            BackColor = Theme.ToolbarBackground,
+            ForeColor = Theme.Foreground,
+            ShowImageMargin = false,
+        };
+
+        var favorita = ActiveView is { } active && _library.IsBookmarked(active.Url);
+        var toggle = new ToolStripMenuItem(
+            favorita ? "Remover dos favoritos (Ctrl+D)" : "Adicionar aos favoritos (Ctrl+D)");
+        toggle.Click += (_, _) => ToggleBookmark();
+        menu.Items.Add(toggle);
+        menu.Items.Add(new ToolStripSeparator());
+
+        AppendSection(menu, "Favoritos", section == LibrarySection.Bookmarks,
+            [.. _library.Bookmarks.Take(15).Select(b => (b.Title, b.Url))]);
+
+        AppendSection(menu, "Historico (Ctrl+H)", section == LibrarySection.History,
+            [.. _library.History.Take(15).Select(h => (h.Title, h.Url))]);
+
+        AppendSection(menu, "Downloads (Ctrl+J)", section == LibrarySection.Downloads,
+            [.. _library.Downloads.Take(15).Select(d => (d.FileName, d.Url))]);
+
+        menu.Show(_libraryButton, new Point(0, _libraryButton.Height));
+    }
+
+    /// <summary>
+    /// A secao pedida vem aberta na raiz; as outras ficam em submenu, para o
+    /// Ctrl+H cair no historico sem mais um clique.
+    /// </summary>
+    private void AppendSection(
+        ContextMenuStrip menu,
+        string title,
+        bool expanded,
+        IReadOnlyList<(string Title, string Url)> entries)
+    {
+        if (entries.Count == 0)
+        {
+            var vazio = new ToolStripMenuItem(title + " (vazio)") { Enabled = false };
+            menu.Items.Add(vazio);
+            return;
+        }
+
+        var items = entries.Select(entry =>
+        {
+            var item = new ToolStripMenuItem(Shorten(entry.Title))
+            {
+                ToolTipText = entry.Url,
+            };
+
+            var url = entry.Url;
+            item.Click += (_, _) => _ = OpenTabAsync(ContainerRegistry.DefaultName, url);
+            return (ToolStripItem)item;
+        }).ToArray();
+
+        if (expanded)
+        {
+            menu.Items.Add(new ToolStripMenuItem(title) { Enabled = false });
+            menu.Items.AddRange(items);
+            menu.Items.Add(new ToolStripSeparator());
+            return;
+        }
+
+        var parent = new ToolStripMenuItem(title);
+        parent.DropDownItems.AddRange(items);
+        menu.Items.Add(parent);
+    }
+
+    private static string Shorten(string text) =>
+        text.Length <= 60 ? text : text[..57] + "...";
+
+    // ---- Persistencia ----
+
+    /// <summary>Reinicia o atraso de gravacao; grava 2s depois do ultimo evento.</summary>
+    private void ScheduleSave()
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        _saveTimer.Stop();
+        _saveTimer.Start();
+    }
+
+    private void SaveState()
+    {
+        var tabs = _session.Tabs.Select(tab =>
+        {
+            var view = _views.GetValueOrDefault(tab.Id);
+
+            return new PersistedTab
+            {
+                Container = tab.Container.Name,
+                Url = view?.Url ?? tab.Url,
+                Title = view?.Title ?? tab.Title,
+                Pinned = tab.Pinned,
+            };
+        }).ToList();
+
+        _stateStore.Save(_library.ToState(
+            tabs,
+            _session.Containers.ToPersisted(),
+            _session.ActiveIndex,
+            _session.ClosedTabs));
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        // Grava na saida sem esperar o atraso: fechar nao pode perder a sessao.
+        _saveTimer.Stop();
+        SaveState();
+
+        base.OnFormClosing(e);
+    }
+
     // ---- IAutomationTarget: chamado da thread do named pipe, so em --test-mode ----
 
     public Task<AutomationState> GetStateAsync() => OnUiAsync(() => new AutomationState
@@ -569,6 +851,16 @@ internal sealed class MainForm : Form, IAutomationTarget
         ActiveTabIndex = _session.ActiveIndex,
         AddressBarText = _address.Text,
         BlocklistSize = _blocklist.Count,
+        Library = new AutomationLibrary
+        {
+            BookmarkCount = _library.Bookmarks.Count,
+            HistoryCount = _library.History.Count,
+            DownloadCount = _library.Downloads.Count,
+            ActiveIsBookmarked = ActiveView is { } active && _library.IsBookmarked(active.Url),
+            ActiveZoom = ActiveView?.ZoomFactor ?? 1.0,
+            BookmarkTitles = [.. _library.Bookmarks.Select(b => b.Title)],
+            HistoryUrls = [.. _library.History.Select(h => h.Url)],
+        },
     });
 
     public Task NavigateAsync(string input) => OnUiAction(() =>
@@ -623,6 +915,35 @@ internal sealed class MainForm : Form, IAutomationTarget
         return completion.Task;
     }
 
+    public Task ToggleBookmarkAsync() => OnUiAction(ToggleBookmark);
+
+    public Task ZoomAsync(string direction) => OnUiAction(() =>
+    {
+        switch (direction.ToLowerInvariant())
+        {
+            case "in":
+                StepZoom(1);
+                break;
+
+            case "out":
+                StepZoom(-1);
+                break;
+
+            case "reset":
+                ResetZoom();
+                break;
+
+            default:
+                throw new ArgumentException("Direcao de zoom desconhecida: " + direction, nameof(direction));
+        }
+    });
+
+    public Task SaveStateAsync() => OnUiAction(() =>
+    {
+        _saveTimer.Stop();
+        SaveState();
+    });
+
     public Task HotkeyAsync(string name) => OnUiAction(() =>
     {
         var keys = ParseHotkey(name);
@@ -641,6 +962,10 @@ internal sealed class MainForm : Form, IAutomationTarget
         "ctrl+shift+tab" => Keys.Control | Keys.Shift | Keys.Tab,
         "ctrl+shift+t" => Keys.Control | Keys.Shift | Keys.T,
         "ctrl+l" => Keys.Control | Keys.L,
+        "ctrl+d" => Keys.Control | Keys.D,
+        "ctrl+plus" => Keys.Control | Keys.Oemplus,
+        "ctrl+minus" => Keys.Control | Keys.OemMinus,
+        "ctrl+0" => Keys.Control | Keys.D0,
         "f5" => Keys.F5,
         "alt+left" => Keys.Alt | Keys.Left,
         "alt+right" => Keys.Alt | Keys.Right,

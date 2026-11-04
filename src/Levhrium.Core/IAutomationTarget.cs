@@ -35,4 +35,13 @@ public interface IAutomationTarget
 
     /// <summary>Avalia a politica de hibernacao agora, sem esperar o proximo tique.</summary>
     Task HibernateTickAsync();
+
+    /// <summary>Favorita ou desfavorita a aba ativa.</summary>
+    Task ToggleBookmarkAsync();
+
+    /// <summary>Zoom da aba ativa: "in", "out" ou "reset".</summary>
+    Task ZoomAsync(string direction);
+
+    /// <summary>Grava o estado agora, sem esperar o atraso.</summary>
+    Task SaveStateAsync();
 }

@@ -23,11 +23,14 @@ public sealed class AppHarness : IAsyncDisposable
     private readonly Process _process;
     private readonly string _handshakeFile;
 
-    private AppHarness(Process process, string handshakeFile, TestHandshake handshake)
+    private readonly bool _ownsDataFolder;
+
+    private AppHarness(Process process, string handshakeFile, TestHandshake handshake, bool ownsDataFolder)
     {
         _process = process;
         _handshakeFile = handshakeFile;
         Handshake = handshake;
+        _ownsDataFolder = ownsDataFolder;
     }
 
     public TestHandshake Handshake { get; }
@@ -38,7 +41,8 @@ public sealed class AppHarness : IAsyncDisposable
     public static async Task<AppHarness> StartAsync(
         string? initialUrl = null,
         TimeSpan? hibernateAfter = null,
-        string? blocklistPath = null)
+        string? blocklistPath = null,
+        string? dataFolder = null)
     {
         var executable = ResolveExecutable();
         var handshakeFile = Path.Combine(
@@ -61,6 +65,12 @@ public sealed class AppHarness : IAsyncDisposable
             startInfo.ArgumentList.Add(initialUrl);
         }
 
+        if (dataFolder is { Length: > 0 })
+        {
+            startInfo.ArgumentList.Add(LaunchOptions.TestDataDirFlag);
+            startInfo.ArgumentList.Add(dataFolder);
+        }
+
         if (blocklistPath is { Length: > 0 })
         {
             startInfo.ArgumentList.Add(LaunchOptions.BlocklistFlag);
@@ -81,7 +91,7 @@ public sealed class AppHarness : IAsyncDisposable
         try
         {
             var handshake = await WaitForHandshakeAsync(process, handshakeFile);
-            return new AppHarness(process, handshakeFile, handshake);
+            return new AppHarness(process, handshakeFile, handshake, ownsDataFolder: dataFolder is null);
         }
         catch
         {
@@ -121,6 +131,13 @@ public sealed class AppHarness : IAsyncDisposable
 
     /// <summary>Forca a avaliacao da politica de hibernacao agora.</summary>
     public Task<string> HibernateTickAsync() => SendAsync("hibernate-tick");
+
+    public Task<string> ToggleBookmarkAsync() => SendAsync("bookmark-toggle");
+
+    public Task<string> ZoomAsync(string direction) => SendAsync("zoom " + direction);
+
+    /// <summary>Grava o estado agora, sem esperar o atraso de 2s.</summary>
+    public Task<string> SaveStateAsync() => SendAsync("save-state");
 
     /// <summary>Espera uma condicao da casca, com timeout: a navegacao e assincrona.</summary>
     public async Task<AutomationState> WaitForStateAsync(
@@ -178,7 +195,7 @@ public sealed class AppHarness : IAsyncDisposable
                 File.Delete(_handshakeFile);
             }
 
-            if (Directory.Exists(Handshake.RootFolder))
+            if (_ownsDataFolder && Directory.Exists(Handshake.RootFolder))
             {
                 Directory.Delete(Handshake.RootFolder, recursive: true);
             }

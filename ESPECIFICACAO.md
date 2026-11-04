@@ -10,8 +10,9 @@ conta mas só uma por navegador).
 
 - **Plataforma:** Windows 10 22H2 x64 e Windows 11 x64. Nenhuma concessão a portabilidade.
 - **Métrica primária:** RAM. Secundária: abertura a frio. Disco: irrelevante.
-- **Alvo:** o processo de browser do Chromium 156 custa ~100–130 MB sozinho; o
-  ganho contra o Chrome aparece de 8 abas pra cima e vem de hibernação, não da casca.
+- **Medido (M3):** as mesmas 10 abas, no mesmo Chromium 156, custam **538 MB no
+  Levhrium contra 1270 MB no Chrome** — 57,7% menos. Métrica: working set privado
+  somado em toda a árvore de processos. O ganho vem de hibernação, não da casca.
 
 ## Engine
 
@@ -65,9 +66,18 @@ integrada, múltiplas janelas.
 
 ## Bloqueio
 
-Por domínio: lista estilo `hosts` (~150k domínios num `HashSet`, ~8–12 MB) via
-`AddWebResourceRequestedFilter`. ~10 MB gastos para economizar 50–200 MB em páginas
-pesadas. Não para anúncio servido do domínio da própria página — limitação aceita.
+Por domínio, via `AddWebResourceRequestedFilter` — sem extensão, sem renderer extra.
+Casa subdomínios subindo rótulo a rótulo (`pixel.ads.doubleclick.net` cai por
+`doubleclick.net`, mas `naoads.test` não cai por `ads.test`). O documento principal
+nunca é bloqueado: digitar um domínio da lista na barra tem de abrir a página.
+
+Semente embutida com 55 rastreadores comuns. **Para cobertura de verdade**, baixe um
+arquivo `hosts` (por exemplo o do StevenBlack) e salve como
+`%LOCALAPPDATA%\Levhriumlocklist.txt` — as duas listas são somadas. Arquivo
+ausente ou ilegível não é erro. `0.0.0.0 localhost` é ignorado de propósito: toda
+lista hosts real começa com essa linha.
+
+Não para anúncio servido do domínio da própria página — limitação aceita.
 
 ## Hotkeys
 
@@ -82,15 +92,23 @@ pesadas. Não para anúncio servido do domínio da própria página — limitaç
 | `Alt+←` / `Alt+→` | voltar / avançar |
 | `Ctrl+±` / `Ctrl+0` | zoom |
 | `F12` | DevTools |
-| `Ctrl+D` / `Ctrl+H` / `Ctrl+J` | favoritar / histórico / downloads |
+| `Ctrl+D` | favoritar / desfavoritar a página |
+| `Ctrl+H` / `Ctrl+J` | menu da biblioteca aberto no histórico / nos downloads |
 
 `AreBrowserAcceleratorKeysEnabled = false`: os atalhos são do Levhrium, não do Edge.
 
 ## Disco
 
-`%LOCALAPPDATA%\Levhrium\` com `WebView2\` (pasta única, perfis como subpastas) e
-`state.json` (abas, containers, favoritos, histórico, pilha de fechadas), gravado
-atomicamente. Sem SQLite.
+`%LOCALAPPDATA%\Levhrium\` com:
+
+- `WebView2\` — pasta única de dados, perfis como subpastas (um processo de browser).
+- `state.json` — abas, containers e suas cores, aba ativa, favoritos, histórico
+  (até 5000), downloads, zoom por host e pilha de fechadas. Gravado em temporário e
+  movido por cima: um desligamento no meio da escrita não perde a sessão.
+  Arquivo corrompido faz o navegador começar limpo, não recusar abrir.
+- `blocklist.txt` — opcional, formato hosts.
+
+Sem SQLite: uma dependência a menos e menos RAM.
 
 ## Estrutura
 
@@ -135,12 +153,12 @@ na validação manual.
 | M | Entrega | Pronto quando | Estado |
 |---|---|---|---|
 | **M1** | Janela + 1 aba + barra de endereço + navegação | o jogo abre e navega | ✅ |
-| **M2** | Abas + containers + selo + hotkeys | **duas contas logadas lado a lado** | — |
-| **M3** | Hibernação + pin + nunca-hibernar + `MemoryUsageTargetLevel` | 10 abas gastam menos que o Chrome com 10, **medido** | — |
-| **M4** | Bloqueio por domínio | requisições bloqueadas, contador visível | — |
-| **M5** | Sessão, histórico, favoritos, downloads, zoom por site | fecha e reabre com tudo no lugar | — |
+| **M2** | Abas + containers + selo + hotkeys | **duas contas logadas lado a lado** | ✅ |
+| **M3** | Hibernação + pin + nunca-hibernar + `MemoryUsageTargetLevel` | 10 abas gastam menos que o Chrome com 10, **medido** | ✅ 538 MB × 1270 MB |
+| **M4** | Bloqueio por domínio | requisições bloqueadas, contador visível | ✅ 10 bloqueios em bbc.com/news |
+| **M5** | Sessão, histórico, favoritos, downloads, zoom por site | fecha e reabre com tudo no lugar | ✅ |
 
-M2 é a meta real do projeto; M3 é a meta da métrica.
+**v1 completa.** M2 era a meta real do projeto; M3, a meta da métrica.
 
 ## Riscos conhecidos
 
@@ -150,6 +168,12 @@ M2 é a meta real do projeto; M3 é a meta da métrica.
 3. **Baseline de screenshot é frágil** (DPI, fonte, tema) — usar em poucos casos.
 4. **Polimento visual depende de olho humano.** Screenshot diz se quebrou, não se
    ficou bom.
+6. **A barra de título escura não foi confirmada visualmente.** Usa a API suportada
+   (`Application.SetColorMode`), mas `PrintWindow` desenha a moldura pelo tema
+   legado e não serve de prova.
+7. **Nem toda aba de fundo aceita congelar.** Na medição do M3, 6 das 9 abas de
+   fundo congelaram; o WebView2 recusa `TrySuspend` em algumas situações. A
+   política tenta de novo a cada tique.
 5. **Runtime WebView2 em outras máquinas**: presente aqui; Win10 sem Edge atualizado
    precisaria do bootstrapper. Só importa se houver distribuição.
 
@@ -157,6 +181,18 @@ M2 é a meta real do projeto; M3 é a meta da métrica.
 
 ```
 dotnet build -c Debug
-dotnet test                 # 30 unitários + 12 de integração/UI
+dotnet test                 # 101 unitários + 40 de integração/UI
+dotnet run --project src/Levhrium.App
 dotnet run --project src/Levhrium.App -- --url https://poke.sigmaproject.online/play
 ```
+
+Opções de linha de comando:
+
+| Flag | Efeito |
+|---|---|
+| `--url <url>` | abre nessa URL em vez de restaurar a sessão |
+| `--hibernate-after <s>` | segundos de ociosidade antes de hibernar (0 desliga) |
+| `--blocklist <arquivo>` | arquivo hosts extra |
+| `--test-mode` | **só em build Debug**: abre CDP e named pipe de automação |
+| `--test-handshake <arquivo>` | onde publicar porta CDP e nome do pipe |
+| `--test-data-dir <pasta>` | pasta de dados fixa; só com `--test-mode` |

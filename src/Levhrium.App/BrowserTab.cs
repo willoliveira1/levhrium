@@ -36,12 +36,29 @@ internal sealed class BrowserTab : IDisposable
 
         View.CoreWebView2InitializationCompleted += OnInitializationCompleted;
         View.NavigationStarting += (_, _) => SetLoading(true);
-        View.NavigationCompleted += (_, _) => SetLoading(false);
+        View.NavigationCompleted += (_, e) =>
+        {
+            SetLoading(false);
+
+            if (e.IsSuccess)
+            {
+                Navigated?.Invoke(this, EventArgs.Empty);
+            }
+        };
         View.SourceChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Disparado quando algo exibido na aba ou na toolbar muda.</summary>
     internal event EventHandler? Changed;
+
+    /// <summary>Disparado quando a pagina termina de carregar, com URL e titulo.</summary>
+    internal event EventHandler? Navigated;
+
+    /// <summary>Disparado quando um download comeca, com a URL e o destino.</summary>
+    internal event EventHandler<(string Url, string FilePath)>? DownloadStarted;
+
+    /// <summary>Disparado quando um download termina, com o destino.</summary>
+    internal event EventHandler<string>? DownloadCompleted;
 
     internal TabModel Model { get; }
 
@@ -65,6 +82,13 @@ internal sealed class BrowserTab : IDisposable
 
     /// <summary>Quantas requisicoes esta aba ja recusou pela lista de dominios.</summary>
     internal int BlockedRequests { get; private set; }
+
+    /// <summary>Fator de zoom aplicado ao conteudo.</summary>
+    internal double ZoomFactor
+    {
+        get => View.ZoomFactor;
+        set => View.ZoomFactor = value;
+    }
 
     internal async Task EnsureInitializedAsync()
     {
@@ -161,6 +185,8 @@ internal sealed class BrowserTab : IDisposable
         core.DocumentTitleChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
         core.HistoryChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
 
+        core.DownloadStarting += OnDownloadStarting;
+
         // Bloqueio por dominio direto no nativo: sem extensao e sem renderer extra.
         if (_blocklist.Count > 0)
         {
@@ -170,6 +196,20 @@ internal sealed class BrowserTab : IDisposable
 
         _ready.TrySetResult();
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnDownloadStarting(object? sender, CoreWebView2DownloadStartingEventArgs e)
+    {
+        var operation = e.DownloadOperation;
+        DownloadStarted?.Invoke(this, (operation.Uri, operation.ResultFilePath));
+
+        operation.StateChanged += (_, _) =>
+        {
+            if (operation.State == CoreWebView2DownloadState.Completed)
+            {
+                DownloadCompleted?.Invoke(this, operation.ResultFilePath);
+            }
+        };
     }
 
     /// <summary>

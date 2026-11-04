@@ -84,6 +84,31 @@ public sealed class ContainerRegistry
     }
 
     /// <summary>
+    /// Repoe containers gravados mantendo as cores originais: um container que
+    /// mudasse de cor ao reabrir o navegador derrubaria a unica pista visual de
+    /// qual aba e qual conta.
+    /// </summary>
+    public void Restore(IEnumerable<PersistedContainer> containers)
+    {
+        ArgumentNullException.ThrowIfNull(containers);
+
+        foreach (var saved in containers)
+        {
+            if (saved.Name is not { Length: > 0 } name || _containers.ContainsKey(name))
+            {
+                continue;
+            }
+
+            _containers[name] = new Container { Name = name, Color = saved.Color };
+            _order.Add(name);
+        }
+    }
+
+    /// <summary>Containers no formato de gravacao.</summary>
+    public IReadOnlyList<PersistedContainer> ToPersisted() =>
+        [.. All.Select(c => new PersistedContainer { Name = c.Name, Color = c.Color })];
+
+    /// <summary>
     /// Sugere um nome livre no formato "Conta N". Usado pelo botao de novo
     /// container, para nao exigir que voce invente nome a cada conta.
     /// </summary>

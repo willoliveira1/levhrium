@@ -80,6 +80,20 @@ public sealed class TabSession
 
     public int ClosedCount => _closed.Count;
 
+    /// <summary>Pilha de fechadas, da mais antiga para a mais recente.</summary>
+    public IReadOnlyList<ClosedTabEntry> ClosedTabs => _closed;
+
+    /// <summary>Repoe a pilha de fechadas vinda do disco, respeitando o limite.</summary>
+    public void RestoreClosed(IEnumerable<ClosedTabEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        foreach (var entry in entries)
+        {
+            PushClosed(entry);
+        }
+    }
+
     public TabModel Open(string containerName, string url, int? atIndex = null, bool activate = true)
     {
         var container = Containers.GetOrCreate(containerName);

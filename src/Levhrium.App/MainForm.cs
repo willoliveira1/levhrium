@@ -563,7 +563,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         var top = (ToolbarHeight - _back.Height) / 2;
         var x = _toolbar.Padding.Left;
 
-        foreach (var button in new[] { _back, _forward, _reload })
+        foreach (var button in new[] { _back, _forward, _reload, _libraryButton })
         {
             button.Location = new Point(x, top);
             x += button.Width + gap;

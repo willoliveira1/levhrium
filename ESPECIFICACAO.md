@@ -73,7 +73,7 @@ nunca é bloqueado: digitar um domínio da lista na barra tem de abrir a página
 
 Semente embutida com 55 rastreadores comuns. **Para cobertura de verdade**, baixe um
 arquivo `hosts` (por exemplo o do StevenBlack) e salve como
-`%LOCALAPPDATA%\Levhriumlocklist.txt` — as duas listas são somadas. Arquivo
+`%LOCALAPPDATA%\Levhrium\blocklist.txt` — as duas listas são somadas. Arquivo
 ausente ou ilegível não é erro. `0.0.0.0 localhost` é ignorado de propósito: toda
 lista hosts real começa com essa linha.
 
@@ -141,6 +141,17 @@ Não negociável, porque porta CDP aberta entrega cookies e sessões a qualquer 
 - Named pipe com ACL restrita ao usuário atual.
 - Pasta de dados descartável em `%TEMP%`: nenhum teste encosta nos dados reais.
 
+**A trava precisa ser rodada em Release para ser verificada.** `dotnet test` usa
+Debug, onde o teste da trava fica compilado para fora. Rode também:
+
+```
+dotnet test tests/Levhrium.Core.Tests -c Release
+```
+
+Verificado também no binário: `Levhrium.dll` de Release não contém nenhum dos
+símbolos `remote-debugging-port`, `AutomationServer`, `Handshake`, `get-state` ou
+`hibernate-tick`, que estão todos presentes no de Debug.
+
 ### Fixtures locais, nunca o jogo real
 
 Kestrel sobe junto do teste servindo páginas determinísticas. Testar contra
@@ -162,20 +173,21 @@ na validação manual.
 
 ## Riscos conhecidos
 
-1. **O alvo de RAM é estimativa até o M3.** Se 10 abas não ganharem do Chrome, a
-   resposta é descarte agressivo (M3b), não reescrever a casca.
+1. **Nem toda aba de fundo aceita congelar.** Na medição do M3, 6 das 9 abas de
+   fundo congelaram — o WebView2 recusa `TrySuspend` em algumas situações. A
+   política tenta de novo a cada tique. Se isso incomodar, o próximo passo é
+   descarte agressivo (recarregar ao voltar), nunca para abas fixadas.
 2. **Bloqueio por domínio não para anúncio de primeira parte.** Aceito.
 3. **Baseline de screenshot é frágil** (DPI, fonte, tema) — usar em poucos casos.
 4. **Polimento visual depende de olho humano.** Screenshot diz se quebrou, não se
    ficou bom.
-6. **A barra de título escura não foi confirmada visualmente.** Usa a API suportada
+5. **A barra de título escura não foi confirmada visualmente.** Usa a API suportada
    (`Application.SetColorMode`), mas `PrintWindow` desenha a moldura pelo tema
    legado e não serve de prova.
-7. **Nem toda aba de fundo aceita congelar.** Na medição do M3, 6 das 9 abas de
-   fundo congelaram; o WebView2 recusa `TrySuspend` em algumas situações. A
-   política tenta de novo a cada tique.
-5. **Runtime WebView2 em outras máquinas**: presente aqui; Win10 sem Edge atualizado
+6. **Runtime WebView2 em outras máquinas**: presente aqui; Win10 sem Edge atualizado
    precisaria do bootstrapper. Só importa se houver distribuição.
+7. **Uma janela só.** Decidido na v1; múltiplas janelas dobrariam a complexidade
+   de sessão sem servir ao caso de uso.
 
 ## Rodando
 

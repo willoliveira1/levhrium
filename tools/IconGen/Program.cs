@@ -88,7 +88,9 @@ internal static class Program
                 g.DrawImage(pick, left, top, width, height);
             }
 
-            DrawLetter(g, shape.DetailColor, left, top, width, height);
+            // Branco levemente azulado: contrasta com o azul da palheta em
+            // qualquer tamanho, inclusive nos 16px da barra de tarefas.
+            DrawLetter(g, Color.FromArgb(255, 245, 249, 255), left, top, width, height);
         }
 
         var result = new Bitmap(size, size, PixelFormat.Format32bppArgb);
@@ -116,7 +118,7 @@ internal static class Program
             "L",
             family,
             (int)FontStyle.Bold,
-            height * 0.42f,
+            height * 0.58f,
             new PointF(0, 0),
             StringFormat.GenericTypographic);
 

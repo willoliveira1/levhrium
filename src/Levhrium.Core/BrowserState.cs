@@ -68,4 +68,10 @@ public sealed record BrowserState
         new Dictionary<string, double>();
 
     public IReadOnlyList<ClosedTabEntry> ClosedTabs { get; init; } = [];
+
+    /// <summary>
+    /// Minutos de ociosidade antes de hibernar, escolhidos nas configuracoes.
+    /// Nulo significa usar o padrao da politica.
+    /// </summary>
+    public int? HibernateAfterMinutes { get; init; }
 }

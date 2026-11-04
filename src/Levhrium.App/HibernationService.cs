@@ -15,7 +15,7 @@ internal sealed class HibernationService : IDisposable
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(2);
 
     private readonly TabSession _session;
-    private readonly HibernationPolicy _policy;
+    private readonly Func<HibernationPolicy> _policy;
     private readonly Func<Guid, BrowserTab?> _viewFor;
     private readonly System.Windows.Forms.Timer _timer;
 
@@ -23,7 +23,7 @@ internal sealed class HibernationService : IDisposable
 
     internal HibernationService(
         TabSession session,
-        HibernationPolicy policy,
+        Func<HibernationPolicy> policy,
         Func<Guid, BrowserTab?> viewFor)
     {
         _session = session;
@@ -70,7 +70,7 @@ internal sealed class HibernationService : IDisposable
                 // hibernam: a fixada do jogo nao congela, mas pode soltar cache.
                 view.SetMemoryUsageLow(!isActive);
 
-                switch (_policy.Decide(tab.ToHibernationInfo(isActive), now))
+                switch (_policy().Decide(tab.ToHibernationInfo(isActive), now))
                 {
                     case HibernationAction.Suspend:
                         if (await view.TrySuspendAsync().ConfigureAwait(true))

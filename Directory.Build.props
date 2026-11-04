@@ -6,6 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
+    <!-- Versao do Levhrium. O instalador e o verificador de atualizacao leem
+         daqui: a tag da release no GitHub tem de bater com este numero. -->
+    <Version>1.0.0</Version>
+    <Company>willoliveira1</Company>
+    <Product>Levhrium</Product>
+    <Copyright>Levhrium</Copyright>
+
     <!-- Enxugamento de memoria: ver ESPECIFICACAO.md, secao Stack.
          InvariantGlobalization fica FALSE de proposito: com ele ligado o WinForms
          estoura ao trocar o layout de teclado (InputLanguageChangedEventArgs chama
@@ -15,6 +22,10 @@
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <TieredPGO>true</TieredPGO>
+
+    <!-- So as traducoes que usamos: o WinForms traz satelites de 12 idiomas e
+         cada um vira peso no instalador que seus amigos baixam. -->
+    <SatelliteResourceLanguages>pt-BR;en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <!-- Hooks de teste (porta CDP + named pipe de automacao) existem somente no Debug.

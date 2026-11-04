@@ -31,6 +31,7 @@ public sealed class LaunchOptions
         int cdpPort,
         string? handshakeFilePath,
         TimeSpan idleThreshold,
+        bool idleThresholdWasSet,
         string? blocklistPath,
         string? testDataDir)
     {
@@ -40,6 +41,7 @@ public sealed class LaunchOptions
         CdpPort = cdpPort;
         HandshakeFilePath = handshakeFilePath;
         IdleThreshold = idleThreshold;
+        IdleThresholdWasSet = idleThresholdWasSet;
         BlocklistPath = blocklistPath;
         TestDataDir = testDataDir;
     }
@@ -66,6 +68,13 @@ public sealed class LaunchOptions
     /// que os testes nao precisem esperar cinco minutos de verdade.
     /// </summary>
     public TimeSpan IdleThreshold { get; }
+
+    /// <summary>
+    /// Verdadeiro quando --hibernate-after foi passado. Sem isso, a configuracao
+    /// gravada venceria a linha de comando e os testes nao conseguiriam fixar
+    /// um limiar curto.
+    /// </summary>
+    public bool IdleThresholdWasSet { get; }
 
     /// <summary>
     /// Arquivo hosts extra. Quando nulo, usa blocklist.txt da pasta de dados se
@@ -99,6 +108,7 @@ public sealed class LaunchOptions
         string? url = null;
         string? handshake = null;
         var idleThreshold = HibernationPolicy.DefaultIdleThreshold;
+        var idleThresholdWasSet = false;
         string? blocklist = null;
         string? testDataDir = null;
 
@@ -128,6 +138,7 @@ public sealed class LaunchOptions
                      && double.TryParse(args[++i], System.Globalization.CultureInfo.InvariantCulture, out var seconds))
             {
                 idleThreshold = TimeSpan.FromSeconds(Math.Max(0, seconds));
+                idleThresholdWasSet = true;
             }
             else if (!args[i].StartsWith("--", StringComparison.Ordinal))
             {
@@ -141,8 +152,17 @@ public sealed class LaunchOptions
 #endif
 
         return testMode
-            ? new LaunchOptions(true, url, Guid.NewGuid().ToString("n")[..12], FindFreePort(), handshake, idleThreshold, blocklist, testDataDir)
-            : new LaunchOptions(false, url, string.Empty, 0, handshakeFilePath: null, idleThreshold, blocklist, testDataDir);
+            ? new LaunchOptions(true, url, Guid.NewGuid().ToString("n")[..12], FindFreePort(), handshake, idleThreshold, idleThresholdWasSet, blocklist, testDataDir)
+            : new LaunchOptions(
+                false,
+                url,
+                string.Empty,
+                0,
+                handshakeFilePath: null,
+                idleThreshold,
+                idleThresholdWasSet,
+                blocklist,
+                testDataDir: null);
     }
 
     /// <summary>

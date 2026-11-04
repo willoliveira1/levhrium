@@ -24,8 +24,16 @@ envelhece, não pesa no instalador e não há republicação por CVE do Chromium
 **C# / .NET 10 + WinForms**, pacote `Microsoft.Web.WebView2`. Barra de título nativa;
 faixa de abas e toolbar desenhadas à mão (GDI+, double-buffered, tema escuro).
 
-Enxugamento em `Directory.Build.props`: `InvariantGlobalization`, GC workstation
-não-concorrente, `TieredPGO`.
+Enxugamento em `Directory.Build.props`: GC workstation não-concorrente,
+`TieredPGO`, satélites de idioma só em pt-BR e en.
+
+**`InvariantGlobalization` fica desligado de propósito.** Ligado, ele economiza
+alguns MB de ICU, mas faz o WinForms estourar ao trocar o layout de teclado:
+`InputLanguageChangedEventArgs` chama `CultureInfo.GetCultureInfo(1046)` e em modo
+invariante não existe cultura nenhuma. Aconteceu em uso real. Há teste de
+regressão travando a configuração.
+
+A casca custa **~10 MB de working set privado**.
 
 > Rust/Win32 foi avaliado e recusado: economizaria ~45 MB (6% com 10 abas) ao custo
 > de 4 GB de toolchain e do único risco real de cronograma. A casca nunca foi onde a
@@ -168,8 +176,32 @@ na validação manual.
 | **M3** | Hibernação + pin + nunca-hibernar + `MemoryUsageTargetLevel` | 10 abas gastam menos que o Chrome com 10, **medido** | ✅ 538 MB × 1270 MB |
 | **M4** | Bloqueio por domínio | requisições bloqueadas, contador visível | ✅ 10 bloqueios em bbc.com/news |
 | **M5** | Sessão, histórico, favoritos, downloads, zoom por site | fecha e reabre com tudo no lugar | ✅ |
+| **M6** | Ícone, instalador e atualização pelo navegador | amigo instala e atualiza sem ajuda | ✅ |
 
 **v1 completa.** M2 era a meta real do projeto; M3, a meta da métrica.
+
+## Distribuição
+
+- **Instalação por usuário** em `%LOCALAPPDATA%\Programs\Levhrium`, sem admin.
+  Não é só conveniência: é o que deixa o botão Atualizar trocar os arquivos sem
+  pedir elevação a cada vez.
+- **Publicação self-contained** (~112 MB em disco, 35 MB de instalador): quem
+  recebe não precisa instalar o .NET antes.
+- **O instalador resolve a dependência**: checa o registro do runtime WebView2 e,
+  se faltar, baixa e roda o bootstrapper Evergreen da Microsoft.
+- **Atualização** em *Configurações → Verificar atualizações*: lê a API de
+  releases do GitHub, compara a tag (`v1.2.3`) com a versão em execução, baixa o
+  instalador anexado e o executa em modo silencioso. A comparação de versões e a
+  leitura da API ficam no núcleo, testadas sem rede.
+- **O instalador não é assinado.** O SmartScreen avisa na primeira execução. Um
+  certificado de assinatura resolveria, mas é pago.
+
+## Privacidade do repositório
+
+O repositório é público. O histórico foi reescrito para trocar o e-mail pessoal
+pelo `@users.noreply.github.com` do GitHub, e varrido: zero ocorrências do e-mail,
+do usuário do Windows ou de caminhos locais em qualquer objeto do git.
+Arquivos de ferramentas de IA e de sessão estão no `.gitignore`.
 
 ## Riscos conhecidos
 

@@ -6,6 +6,19 @@ artifacts/
 *.suo
 .vs/
 
+# Ferramentas de IA e sessao: nunca entram no repositorio publico.
+.claude/
+CLAUDE.md
+.superpowers/
+.tokensave/
+.mcp.json
+.task/
+*.local.json
+
+# Instaladores gerados
+dist/
+*.iss.user
+
 # Testes
 TestResults/
 playwright-report/

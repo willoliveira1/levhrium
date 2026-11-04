@@ -170,6 +170,21 @@ internal sealed class MainForm : Form, IAutomationTarget
     {
         base.OnHandleCreated(e);
         NativeTheme.ApplyDarkTitleBar(Handle);
+        ApplyWindowIcon();
+    }
+
+    /// <summary>
+    /// Icone da janela e da barra de tarefas, vindo do .ico embutido -- que tem
+    /// todos os tamanhos, ao contrario do que o Windows extrairia do .exe.
+    /// </summary>
+    private void ApplyWindowIcon()
+    {
+        using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("Levhrium.icon");
+
+        if (stream is not null)
+        {
+            Icon = new Icon(stream);
+        }
     }
 
     protected override void OnLoad(EventArgs e)

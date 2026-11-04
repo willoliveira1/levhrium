@@ -6,8 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
-    <!-- Enxugamento de memoria: ver ESPECIFICACAO.md, secao Stack. -->
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Enxugamento de memoria: ver ESPECIFICACAO.md, secao Stack.
+         InvariantGlobalization fica FALSE de proposito: com ele ligado o WinForms
+         estoura ao trocar o layout de teclado (InputLanguageChangedEventArgs chama
+         CultureInfo.GetCultureInfo(1046) e nao existe cultura nenhuma em modo
+         invariante). Custa alguns MB de ICU; travar o navegador custa mais. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <TieredPGO>true</TieredPGO>

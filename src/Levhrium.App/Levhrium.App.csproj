@@ -7,10 +7,17 @@
     <RootNamespace>Levhrium.App</RootNamespace>
     <!-- Navegador roda 64-bit; nao mexe no caminho de saida. -->
     <PlatformTarget>x64</PlatformTarget>
+    <ApplicationIcon>..\..\build\levhrium.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- O mesmo .ico embutido: o ApplicationIcon da o icone do arquivo .exe,
+         este da o icone da janela e da barra de tarefas, com todos os tamanhos. -->
+    <EmbeddedResource Include="..\..\build\levhrium.ico" LogicalName="Levhrium.icon" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,6 +27,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Levhrium.E2E.Tests" />
   </ItemGroup>
+
   <!-- O pacote WebView2 referencia tambem a DLL do WPF, que puxa WindowsBase 5.0 e
        gera MSB3277 num app que nao usa WPF. Como usamos so o controle WinForms,
        tiramos a referencia: o aviso sumindo mantem o build limpo para avisos reais. -->

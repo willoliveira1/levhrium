@@ -8,7 +8,7 @@
 
     <!-- Versao do Levhrium. O instalador e o verificador de atualizacao leem
          daqui: a tag da release no GitHub tem de bater com este numero. -->
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Company>willoliveira1</Company>
     <Product>Levhrium</Product>
     <Copyright>Levhrium</Copyright>

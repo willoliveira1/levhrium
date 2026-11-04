@@ -9,11 +9,13 @@ namespace IconGen;
 /// Gera o icone do Levhrium a partir de um PNG de origem: mesma silhueta e mesmo
 /// gradiente da imagem dada, sem os detalhes internos, com um "L" dentro.
 ///
-/// A silhueta e extraida do PNG de origem por inundacao a partir das bordas --
-/// o que a inundacao nao alcanca e a palheta, e as cordas escuras ficam cercadas
-/// de azul, entao contam como parte dela.
+/// A silhueta e extraida por inundacao a partir das bordas, ficando com a maior
+/// regiao conectada -- os cantos do PNG de origem nao sao transparentes e
+/// contariam como parte do desenho.
 ///
-/// Uso: dotnet run --project tools/IconGen -- &lt;origem.png&gt; &lt;pasta-destino&gt;
+/// Uso:
+///   IconGen de-origem.png pasta-destino [estilo]
+///   IconGen de-origem.png pasta-destino variants   (gera uma amostra de cada estilo)
 /// </summary>
 internal static class Program
 {
@@ -21,13 +23,14 @@ internal static class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("Uso: IconGen <origem.png> <pasta-destino>");
+            Console.Error.WriteLine("Uso: IconGen <origem.png> <pasta-destino> [estilo|variants]");
             Environment.ExitCode = 1;
             return;
         }
 
         var source = args[0];
         var outputDirectory = args[1];
+        var variant = args.Length > 2 ? args[2] : "1-branco-grande";
 
         Directory.CreateDirectory(outputDirectory);
 
@@ -36,17 +39,29 @@ internal static class Program
 
         Console.WriteLine($"palheta: {shape.Width}x{shape.Height}");
         Console.WriteLine($"gradiente: {Hex(shape.TopColor)} -> {Hex(shape.BottomColor)}");
-        Console.WriteLine($"cordas: {Hex(shape.DetailColor)}");
 
-        // PNG grande para o instalador e para conferencia.
+        if (variant.Equals("variants", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var (name, style) in LogoStyle.All(shape))
+            {
+                using var preview = Render(shape, 512, style);
+                preview.Save(Path.Combine(outputDirectory, $"opcao-{name}.png"), ImageFormat.Png);
+                Console.WriteLine($"  opcao-{name}.png");
+            }
+
+            return;
+        }
+
+        var chosen = LogoStyle.ByName(variant, shape);
+
         foreach (var size in new[] { 256, 512 })
         {
-            using var preview = Render(shape, size);
+            using var preview = Render(shape, size, chosen);
             preview.Save(Path.Combine(outputDirectory, $"levhrium-{size}.png"), ImageFormat.Png);
         }
 
-        WriteIco(shape, Path.Combine(outputDirectory, "levhrium.ico"));
-        Console.WriteLine($"gerado em {outputDirectory}");
+        WriteIco(shape, Path.Combine(outputDirectory, "levhrium.ico"), chosen);
+        Console.WriteLine($"gerado em {outputDirectory} (estilo: {variant})");
     }
 
     private static string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
@@ -56,7 +71,7 @@ internal static class Program
     /// reamostragem: a mascara e binaria, entao o suavizado das bordas vem da
     /// reducao, nao do traco.
     /// </summary>
-    private static Bitmap Render(PickShape shape, int size)
+    private static Bitmap Render(PickShape shape, int size, LogoStyle style)
     {
         const int Supersample = 4;
         var big = size * Supersample;
@@ -69,8 +84,14 @@ internal static class Program
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             g.Clear(Color.Transparent);
 
-            // A palheta ocupa quase todo o icone: o pedido foi so o logo azul.
-            var target = (int)(big * 0.94);
+            if (style.Background is { } backdrop)
+            {
+                DrawRoundedSquare(g, big, backdrop);
+            }
+
+            // Sem fundo a palheta ocupa quase todo o icone; com fundo ela recua
+            // para caber dentro do quadrado.
+            var target = (int)(big * (style.Background is null ? 0.94 : 0.64));
             var width = target;
             var height = (int)(target * (double)shape.Height / shape.Width);
 
@@ -88,9 +109,7 @@ internal static class Program
                 g.DrawImage(pick, left, top, width, height);
             }
 
-            // Branco levemente azulado: contrasta com o azul da palheta em
-            // qualquer tamanho, inclusive nos 16px da barra de tarefas.
-            DrawLetter(g, Color.FromArgb(255, 245, 249, 255), left, top, width, height);
+            DrawLetter(g, style, left, top, width, height);
         }
 
         var result = new Bitmap(size, size, PixelFormat.Format32bppArgb);
@@ -109,27 +128,127 @@ internal static class Program
     /// O "L" fica na parte larga de cima da palheta: ela afunila para baixo e um
     /// L centralizado no meio geometrico encostaria nas laterais.
     /// </summary>
-    private static void DrawLetter(Graphics g, Color color, int left, int top, int width, int height)
+    private static void DrawLetter(Graphics g, LogoStyle style, int left, int top, int width, int height)
     {
+        if (style.Strings > 0)
+        {
+            DrawStrings(g, style, left, top, width, height);
+            return;
+        }
+
         using var path = new GraphicsPath();
-        using var family = new FontFamily("Segoe UI");
+        using var family = new FontFamily(style.FontName);
 
         path.AddString(
             "L",
             family,
-            (int)FontStyle.Bold,
-            height * 0.58f,
+            (int)style.FontStyle,
+            height * style.LetterScale,
             new PointF(0, 0),
             StringFormat.GenericTypographic);
 
         var bounds = path.GetBounds();
+
+        // A palheta afunila: uma letra larga demais sai pelas laterais. Encolhe
+        // ate caber na largura util antes de posicionar.
+        // Faixa util: abaixo de 74% da altura a palheta ja afunilou demais, e
+        // acima de 10% a borda e arredondada.
+        const float SafeTop = 0.10f;
+        const float SafeBottom = 0.74f;
+
+        var maxWidth = width * 0.52f;
+        var maxHeight = height * (SafeBottom - SafeTop);
+        var scale = Math.Min(maxWidth / bounds.Width, maxHeight / bounds.Height);
+
+        if (scale < 1f)
+        {
+            using var shrink = new Matrix();
+            shrink.Scale(scale, scale);
+            path.Transform(shrink);
+            bounds = path.GetBounds();
+        }
+
+        // Centro pedido, mas empurrado para dentro da faixa util se estourar.
+        var centerY = height * style.LetterY;
+        centerY = Math.Max(centerY, (height * SafeTop) + (bounds.Height / 2f));
+        centerY = Math.Min(centerY, (height * SafeBottom) - (bounds.Height / 2f));
+
         using var move = new Matrix();
 
         move.Translate(
             left + ((width - bounds.Width) / 2f) - bounds.X,
-            top + (height * 0.38f) - (bounds.Height / 2f) - bounds.Y);
+            top + centerY - (bounds.Height / 2f) - bounds.Y);
 
         path.Transform(move);
+
+        if (style.Cutout)
+        {
+            // Vazado: o L vira buraco na palheta, deixando passar o que esta atras.
+            using var erase = new SolidBrush(Color.Transparent);
+            g.CompositingMode = CompositingMode.SourceCopy;
+            g.FillPath(erase, path);
+            g.CompositingMode = CompositingMode.SourceOver;
+            return;
+        }
+
+        using var brush = new SolidBrush(style.LetterColor);
+        g.FillPath(brush, path);
+    }
+
+    /// <summary>
+    /// Cordas verticais como no logo de origem: comprimentos diferentes, as do
+    /// meio mais longas, acompanhando o afunilamento da palheta.
+    /// </summary>
+    private static void DrawStrings(Graphics g, LogoStyle style, int left, int top, int width, int height)
+    {
+        var count = style.Strings;
+        var thickness = Math.Max(1f, width * 0.030f);
+        var spacing = width * 0.145f;
+        var centerX = left + (width / 2f);
+        var centerY = top + (height * 0.44f);
+
+        using var pen = new Pen(style.LetterColor, thickness) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+
+        for (var i = 0; i < count; i++)
+        {
+            var offset = (i - ((count - 1) / 2f)) * spacing;
+
+            // A do meio e a mais comprida; as das pontas encurtam.
+            var distance = Math.Abs(i - ((count - 1) / 2f)) / Math.Max(1f, (count - 1) / 2f);
+            var halfLength = height * (0.26f - (0.07f * distance));
+
+            var x = centerX + offset;
+
+            if (style.Cutout)
+            {
+                using var erase = new Pen(Color.Transparent, thickness)
+                {
+                    StartCap = LineCap.Round,
+                    EndCap = LineCap.Round,
+                };
+
+                g.CompositingMode = CompositingMode.SourceCopy;
+                g.DrawLine(erase, x, centerY - halfLength, x, centerY + halfLength);
+                g.CompositingMode = CompositingMode.SourceOver;
+                continue;
+            }
+
+            g.DrawLine(pen, x, centerY - halfLength, x, centerY + halfLength);
+        }
+    }
+
+    /// <summary>Quadrado arredondado de fundo, no estilo de icone de aplicativo.</summary>
+    private static void DrawRoundedSquare(Graphics g, int size, Color color)
+    {
+        var radius = (int)(size * 0.22);
+        var diameter = radius * 2;
+
+        using var path = new GraphicsPath();
+        path.AddArc(0, 0, diameter, diameter, 180, 90);
+        path.AddArc(size - diameter, 0, diameter, diameter, 270, 90);
+        path.AddArc(size - diameter, size - diameter, diameter, diameter, 0, 90);
+        path.AddArc(0, size - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
 
         using var brush = new SolidBrush(color);
         g.FillPath(brush, path);
@@ -139,14 +258,14 @@ internal static class Program
     /// ICO multi-tamanho escrito a mao: cada entrada e um PNG, suportado desde o
     /// Windows Vista e muito menor que bitmaps nao comprimidos.
     /// </summary>
-    private static void WriteIco(PickShape shape, string path)
+    private static void WriteIco(PickShape shape, string path, LogoStyle style)
     {
         int[] sizes = [16, 24, 32, 48, 64, 128, 256];
         var frames = new List<(int Size, byte[] Data)>();
 
         foreach (var size in sizes)
         {
-            using var bitmap = Render(shape, size);
+            using var bitmap = Render(shape, size, style);
             using var buffer = new MemoryStream();
             bitmap.Save(buffer, ImageFormat.Png);
             frames.Add((size, buffer.ToArray()));
@@ -181,6 +300,120 @@ internal static class Program
     }
 }
 
+/// <summary>Um estilo de logo: como o "L" e desenhado e se ha fundo.</summary>
+internal sealed record LogoStyle
+{
+    private static readonly Color NearWhite = Color.FromArgb(255, 245, 249, 255);
+
+    public required Color LetterColor { get; init; }
+
+    /// <summary>Altura da letra como fracao da altura da palheta.</summary>
+    public required float LetterScale { get; init; }
+
+    public string FontName { get; init; } = "Segoe UI";
+
+    public FontStyle FontStyle { get; init; } = FontStyle.Bold;
+
+    /// <summary>Quando preenchido, desenha um quadrado arredondado atras.</summary>
+    public Color? Background { get; init; }
+
+    /// <summary>Quando verdadeiro, o L e recortado da palheta em vez de pintado.</summary>
+    public bool Cutout { get; init; }
+
+    /// <summary>
+    /// Centro vertical da letra, como fracao da altura da palheta. A palheta
+    /// afunila para baixo, entao letra maior precisa subir para nao encostar.
+    /// </summary>
+    public float LetterY { get; init; } = 0.38f;
+
+    /// <summary>
+    /// Em vez da letra, desenha este numero de cordas verticais, como no logo de
+    /// origem. Zero desenha a letra.
+    /// </summary>
+    public int Strings { get; init; }
+
+    public static IEnumerable<(string Name, LogoStyle Style)> All(PickShape shape) =>
+    [
+        ("1-branco-grande", new LogoStyle
+        {
+            LetterColor = NearWhite,
+            LetterScale = 0.58f,
+        }),
+        ("2-branco-fino", new LogoStyle
+        {
+            LetterColor = NearWhite,
+            LetterScale = 0.62f,
+            FontStyle = FontStyle.Regular,
+        }),
+        ("3-com-fundo", new LogoStyle
+        {
+            LetterColor = NearWhite,
+            LetterScale = 0.58f,
+            Background = Color.FromArgb(255, 26, 27, 30),
+        }),
+        ("4-vazado", new LogoStyle
+        {
+            LetterColor = NearWhite,
+            LetterScale = 0.58f,
+            Cutout = true,
+        }),
+        ("5-escuro", new LogoStyle
+        {
+            LetterColor = shape.DetailColor,
+            LetterScale = 0.58f,
+        }),
+
+        // Segunda rodada: variacoes do vazado com L maior, e o estilo de origem
+        // com cordas no lugar da letra.
+        ("6-vazado-maior", new LogoStyle
+        {
+            LetterColor = NearWhite,
+            LetterScale = 0.72f,
+            LetterY = 0.36f,
+            Cutout = true,
+        }),
+        ("7-vazado-enorme", new LogoStyle
+        {
+            LetterColor = NearWhite,
+            LetterScale = 0.86f,
+            LetterY = 0.33f,
+            Cutout = true,
+        }),
+        ("8-branco-maior", new LogoStyle
+        {
+            LetterColor = NearWhite,
+            LetterScale = 0.72f,
+            LetterY = 0.36f,
+        }),
+        ("9-branco-enorme", new LogoStyle
+        {
+            LetterColor = NearWhite,
+            LetterScale = 0.86f,
+            LetterY = 0.33f,
+        }),
+        ("10-cordas", new LogoStyle
+        {
+            LetterColor = shape.DetailColor,
+            LetterScale = 0f,
+            Strings = 5,
+        }),
+    ];
+
+    public static LogoStyle ByName(string name, PickShape shape)
+    {
+        foreach (var (candidate, style) in All(shape))
+        {
+            if (candidate.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                candidate.StartsWith(name + "-", StringComparison.OrdinalIgnoreCase))
+            {
+                return style;
+            }
+        }
+
+        return All(shape).First().Style;
+    }
+}
+
 /// <summary>Silhueta da palheta e as cores amostradas do PNG de origem.</summary>
 internal sealed class PickShape
 {
@@ -204,7 +437,7 @@ internal sealed class PickShape
 
     public Color BottomColor { get; }
 
-    /// <summary>Cor escura das cordas; e com ela que o "L" e desenhado.</summary>
+    /// <summary>Cor escura dos detalhes internos do PNG de origem.</summary>
     public Color DetailColor { get; }
 
     public static PickShape Extract(Bitmap source)
@@ -214,14 +447,13 @@ internal sealed class PickShape
         var pixels = ReadPixels(source, out var stride);
 
         // Amostra no meio da borda esquerda, nao no canto: o canto e arredondado
-        // e transparente, e amostrar ali faria a inundacao parar na borda do
-        // quadrado escuro em vez de atravessa-lo ate a palheta.
+        // e amostrar ali faria a inundacao parar na borda do quadrado escuro.
         var background = GetColor(pixels, stride, width / 20, height / 2);
         var isBackground = FloodFillFromBorders(pixels, stride, width, height, background);
 
-        // Fora do quadrado arredondado o PNG tem cantos brancos, que a inundacao
-        // nao alcanca e contariam como palheta. Ficar com a maior regiao conectada
-        // descarta os cantos sem depender da cor deles.
+        // Fora do quadrado arredondado o PNG tem cantos de outra cor, que a
+        // inundacao nao alcanca e contariam como parte do desenho. Ficar com a
+        // maior regiao conectada descarta os cantos sem depender da cor deles.
         var pick = LargestRegion(isBackground, width, height);
 
         var (minX, minY, maxX, maxY) = BoundingBox(pick, width, height);
@@ -237,8 +469,8 @@ internal sealed class PickShape
             }
         }
 
-        // Media dos pixels azuis de cada faixa, nao um pixel so: as cordas
-        // escuras correm pelo meio da palheta e uma amostra pontual cairia nelas.
+        // Media dos pixels azuis de cada faixa, nao um pixel so: os detalhes
+        // escuros correm pelo meio e uma amostra pontual cairia neles.
         var top = AverageBlue(pixels, stride, pick, minX, minY, pickWidth, pickHeight, 0.06, 0.16);
         var bottom = AverageBlue(pixels, stride, pick, minX, minY, pickWidth, pickHeight, 0.80, 0.90);
         var detail = FindDarkestInside(pixels, stride, pick, minX, minY, pickWidth, pickHeight);
@@ -246,7 +478,7 @@ internal sealed class PickShape
         return new PickShape(mask, pickWidth, pickHeight, top, bottom, detail);
     }
 
-    /// <summary>A palheta no tamanho original, preenchida com o gradiente vertical.</summary>
+    /// <summary>A silhueta no tamanho original, preenchida com o gradiente vertical.</summary>
     public Bitmap ToBitmap()
     {
         var bitmap = new Bitmap(Width, Height, PixelFormat.Format32bppArgb);
@@ -337,7 +569,6 @@ internal sealed class PickShape
 
             var color = GetColor(pixels, stride, x, y);
 
-            // Canto arredondado e transparente tambem conta como fundo.
             var isBackground = color.A < 32 ||
                 (Math.Abs(color.R - background.R) <= 28 &&
                  Math.Abs(color.G - background.G) <= 28 &&
@@ -359,8 +590,8 @@ internal sealed class PickShape
     }
 
     /// <summary>
-    /// Maior grupo de pixels nao-fundo ligados entre si. A palheta e o maior; os
-    /// cantos brancos de fora do quadrado arredondado sao grupos pequenos.
+    /// Maior grupo de pixels nao-fundo ligados entre si. A figura principal e o
+    /// maior; os cantos de fora do quadrado arredondado sao grupos pequenos.
     /// </summary>
     private static bool[,] LargestRegion(bool[,] isBackground, int width, int height)
     {
@@ -446,7 +677,7 @@ internal sealed class PickShape
 
     /// <summary>
     /// Cor media dos pixels claramente azuis (B bem acima de R) numa faixa
-    /// horizontal da palheta, dada em fracao da altura.
+    /// horizontal da figura, dada em fracao da altura.
     /// </summary>
     private static Color AverageBlue(
         byte[] pixels,
@@ -474,8 +705,6 @@ internal sealed class PickShape
 
                 var color = GetColor(pixels, stride, minX + x, minY + y);
 
-                // As cordas sao escuras e pouco saturadas; o azul da palheta tem
-                // o canal azul bem acima do vermelho.
                 if (color.B - color.R < 40)
                 {
                     continue;

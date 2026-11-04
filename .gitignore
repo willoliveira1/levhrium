@@ -1,0 +1,15 @@
+# Build
+[Bb]in/
+[Oo]bj/
+artifacts/
+*.user
+*.suo
+.vs/
+
+# Testes
+TestResults/
+playwright-report/
+.playwright/
+
+# Baselines de screenshot geradas localmente (as de referencia sao versionadas em tests/**/baselines)
+**/screenshots-actual/

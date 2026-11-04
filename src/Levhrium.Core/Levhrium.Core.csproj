@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Sem WinForms e sem WebView2 de proposito: este projeto tem de ser testavel sem abrir janela. -->
+</Project>

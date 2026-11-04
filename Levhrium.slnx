@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Levhrium.App/Levhrium.App.csproj" />
+    <Project Path="src/Levhrium.Core/Levhrium.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Levhrium.Core.Tests/Levhrium.Core.Tests.csproj" />
+    <Project Path="tests/Levhrium.E2E.Tests/Levhrium.E2E.Tests.csproj" />
+  </Folder>
+</Solution>

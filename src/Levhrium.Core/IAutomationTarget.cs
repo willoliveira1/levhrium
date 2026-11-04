@@ -32,4 +32,7 @@ public interface IAutomationTarget
     /// o teste prove a ligacao real e nao um atalho de codigo.
     /// </summary>
     Task HotkeyAsync(string name);
+
+    /// <summary>Avalia a politica de hibernacao agora, sem esperar o proximo tique.</summary>
+    Task HibernateTickAsync();
 }

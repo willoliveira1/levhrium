@@ -16,6 +16,8 @@ internal sealed class MainForm : Form, IAutomationTarget
     private readonly WebViewSettings _webViewSettings;
     private readonly SearchEngine _searchEngine = SearchEngine.Default;
     private readonly TabSession _session;
+    private readonly HibernationPolicy _hibernationPolicy;
+    private readonly HibernationService _hibernation;
     private readonly Dictionary<Guid, BrowserTab> _views = [];
 
     private readonly TabStrip _tabStrip;
@@ -37,6 +39,8 @@ internal sealed class MainForm : Form, IAutomationTarget
         _options = options;
         _webViewSettings = new WebViewSettings(options, paths);
         _session = new TabSession(new ContainerRegistry());
+        _hibernationPolicy = new HibernationPolicy(options.IdleThreshold);
+        _hibernation = new HibernationService(_session, _hibernationPolicy, id => _views.GetValueOrDefault(id));
 
         Text = AppPaths.ProductName;
         BackColor = Theme.WindowBackground;
@@ -203,6 +207,10 @@ internal sealed class MainForm : Form, IAutomationTarget
     {
         var model = _session.Open(containerName, url, atIndex, activate);
 
+        // Aba de dominio protegido nasce fixada: um jogo idle congelado para de
+        // progredir, e a fixacao deixa a protecao visivel na faixa de abas.
+        model.Pinned = _hibernationPolicy.ShouldPinOnOpen(url);
+
         var view = new BrowserTab(model, _webViewSettings.For(model.Container));
         view.Changed += (_, _) => OnTabContentChanged(model.Id);
 
@@ -293,7 +301,20 @@ internal sealed class MainForm : Form, IAutomationTarget
     {
         foreach (var (id, view) in _views)
         {
-            view.View.Visible = _session.Active?.Id == id;
+            var isActive = _session.Active?.Id == id;
+            view.View.Visible = isActive;
+
+            // Retoma na hora, sem esperar o proximo tique: clicar numa aba
+            // hibernada tem de responder imediatamente.
+            if (isActive && view.IsSuspended)
+            {
+                view.Resume();
+
+                if (_session.Find(id) is { } model)
+                {
+                    model.Suspended = false;
+                }
+            }
         }
 
         ActiveView?.View.Focus();
@@ -528,6 +549,27 @@ internal sealed class MainForm : Form, IAutomationTarget
         }
     });
 
+    /// <summary>Forca uma avaliacao da politica de hibernacao agora.</summary>
+    public Task HibernateTickAsync()
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        BeginInvoke(async () =>
+        {
+            try
+            {
+                await _hibernation.TickAsync();
+                completion.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                completion.TrySetException(ex);
+            }
+        });
+
+        return completion.Task;
+    }
+
     public Task HotkeyAsync(string name) => OnUiAction(() =>
     {
         var keys = ParseHotkey(name);
@@ -566,6 +608,7 @@ internal sealed class MainForm : Form, IAutomationTarget
             CanGoForward = view?.CanGoForward ?? false,
             IsLoading = view?.IsLoading ?? false,
             Pinned = model.Pinned,
+            Suspended = view?.IsSuspended ?? model.Suspended,
         };
     }
 

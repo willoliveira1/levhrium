@@ -197,6 +197,10 @@ internal sealed class AutomationServer : IDisposable
                     await _target.PinTabAsync(ParseIndex(pinArgs[0]), pinned).ConfigureAwait(false);
                     return Ok();
 
+                case "hibernate-tick":
+                    await _target.HibernateTickAsync().ConfigureAwait(false);
+                    return Ok();
+
                 case "hotkey":
                     if (argument.Length == 0)
                     {

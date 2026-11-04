@@ -15,18 +15,23 @@ public sealed class LaunchOptions
     public const string UrlFlag = "--url";
     public const string HandshakeFlag = "--test-handshake";
 
+    /// <summary>Segundos de ociosidade antes de hibernar; 0 desliga a hibernacao.</summary>
+    public const string HibernateAfterFlag = "--hibernate-after";
+
     private LaunchOptions(
         bool testMode,
         string? initialUrl,
         string instanceId,
         int cdpPort,
-        string? handshakeFilePath)
+        string? handshakeFilePath,
+        TimeSpan idleThreshold)
     {
         TestMode = testMode;
         InitialUrl = initialUrl;
         InstanceId = instanceId;
         CdpPort = cdpPort;
         HandshakeFilePath = handshakeFilePath;
+        IdleThreshold = idleThreshold;
     }
 
     public bool TestMode { get; }
@@ -46,6 +51,12 @@ public sealed class LaunchOptions
     /// </summary>
     public string? HandshakeFilePath { get; }
 
+    /// <summary>
+    /// Quanto tempo uma aba de fundo espera antes de hibernar. Configuravel para
+    /// que os testes nao precisem esperar cinco minutos de verdade.
+    /// </summary>
+    public TimeSpan IdleThreshold { get; }
+
     /// <summary>Nome do named pipe de automacao desta instancia.</summary>
     public string AutomationPipeName => $"{AppPaths.ProductName}-test-{InstanceId}";
 
@@ -59,6 +70,7 @@ public sealed class LaunchOptions
         var testMode = false;
         string? url = null;
         string? handshake = null;
+        var idleThreshold = HibernationPolicy.DefaultIdleThreshold;
 
         for (var i = 0; i < args.Count; i++)
         {
@@ -74,6 +86,11 @@ public sealed class LaunchOptions
             {
                 handshake = args[++i];
             }
+            else if (string.Equals(args[i], HibernateAfterFlag, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count
+                     && double.TryParse(args[++i], System.Globalization.CultureInfo.InvariantCulture, out var seconds))
+            {
+                idleThreshold = TimeSpan.FromSeconds(Math.Max(0, seconds));
+            }
             else if (!args[i].StartsWith("--", StringComparison.Ordinal))
             {
                 url ??= args[i];
@@ -86,8 +103,8 @@ public sealed class LaunchOptions
 #endif
 
         return testMode
-            ? new LaunchOptions(true, url, Guid.NewGuid().ToString("n")[..12], FindFreePort(), handshake)
-            : new LaunchOptions(false, url, string.Empty, 0, handshakeFilePath: null);
+            ? new LaunchOptions(true, url, Guid.NewGuid().ToString("n")[..12], FindFreePort(), handshake, idleThreshold)
+            : new LaunchOptions(false, url, string.Empty, 0, handshakeFilePath: null, idleThreshold);
     }
 
     /// <summary>

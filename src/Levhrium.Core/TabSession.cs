@@ -11,8 +11,23 @@ public sealed class TabModel
 
     public string Title { get; set; } = string.Empty;
 
-    /// <summary>Aba fixada nunca hiberna (ver politica no M3).</summary>
+    /// <summary>Aba fixada nunca hiberna.</summary>
     public bool Pinned { get; set; }
+
+    /// <summary>Ultima vez que esta aba foi a ativa; base do limiar de hibernacao.</summary>
+    public DateTimeOffset LastActiveAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Renderer congelado por TrySuspend.</summary>
+    public bool Suspended { get; set; }
+
+    public TabHibernationInfo ToHibernationInfo(bool isActive) => new()
+    {
+        IsActive = isActive,
+        Pinned = Pinned,
+        IsSuspended = Suspended,
+        Url = Url,
+        LastActiveAt = LastActiveAt,
+    };
 }
 
 /// <summary>Uma aba fechada, com o bastante para reabri-la onde e como estava.</summary>
@@ -173,7 +188,19 @@ public sealed class TabSession
             return;
         }
 
+        // A aba que sai de cena comeca a contar o tempo ocioso agora.
+        if (Active is { } leaving)
+        {
+            leaving.LastActiveAt = DateTimeOffset.UtcNow;
+        }
+
         ActiveIndex = clamped;
+
+        if (Active is { } entering)
+        {
+            entering.LastActiveAt = DateTimeOffset.UtcNow;
+        }
+
         ActiveChanged?.Invoke(this, Active);
     }
 

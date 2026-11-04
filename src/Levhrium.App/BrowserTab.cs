@@ -54,6 +54,9 @@ internal sealed class BrowserTab : IDisposable
 
     internal bool IsLoading => _isLoading;
 
+    /// <summary>Renderer congelado por <see cref="TrySuspendAsync"/>.</summary>
+    internal bool IsSuspended { get; private set; }
+
     internal async Task EnsureInitializedAsync()
     {
         await View.EnsureCoreWebView2Async().ConfigureAwait(true);
@@ -83,6 +86,48 @@ internal sealed class BrowserTab : IDisposable
     }
 
     internal void Reload() => View.CoreWebView2?.Reload();
+
+    /// <summary>
+    /// Congela o renderer. Nao descarta: o DOM continua vivo e retomar e
+    /// instantaneo -- perder estado numa aba de jogo idle seria pior que a RAM.
+    /// </summary>
+    internal async Task<bool> TrySuspendAsync()
+    {
+        if (View.CoreWebView2 is not { } core || IsSuspended)
+        {
+            return false;
+        }
+
+        // O WebView2 recusa suspender uma aba visivel; so hibernamos abas de fundo.
+        var suspended = await core.TrySuspendAsync().ConfigureAwait(true);
+        IsSuspended = suspended;
+        return suspended;
+    }
+
+    internal void Resume()
+    {
+        if (View.CoreWebView2 is not { } core || !IsSuspended)
+        {
+            return;
+        }
+
+        core.Resume();
+        IsSuspended = false;
+    }
+
+    /// <summary>
+    /// Pede ao Chromium que solte caches desta aba. Vale para toda aba de fundo,
+    /// inclusive as fixadas, que nao podem ser congeladas mas podem emagrecer.
+    /// </summary>
+    internal void SetMemoryUsageLow(bool low)
+    {
+        if (View.CoreWebView2 is { } core)
+        {
+            core.MemoryUsageTargetLevel = low
+                ? CoreWebView2MemoryUsageTargetLevel.Low
+                : CoreWebView2MemoryUsageTargetLevel.Normal;
+        }
+    }
 
     public void Dispose() => View.Dispose();
 

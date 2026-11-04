@@ -36,4 +36,7 @@ public sealed record AutomationTab
 
     /// <summary>Aba fixada: isenta de hibernacao.</summary>
     public required bool Pinned { get; init; }
+
+    /// <summary>Renderer congelado por TrySuspend.</summary>
+    public required bool Suspended { get; init; }
 }

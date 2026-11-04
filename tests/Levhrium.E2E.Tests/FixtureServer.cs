@@ -63,6 +63,23 @@ public sealed class FixtureServer : IAsyncDisposable
                 """);
         });
 
+        // Fixture de hibernacao: um contador que so avanca enquanto a pagina
+        // executa. Congelada, o titulo para; descartada, voltaria a zero.
+        app.MapGet("/contador", () => Page(
+            "Contador 0",
+            """
+            <h1 id="titulo">Contador</h1>
+            <p id="valor">0</p>
+            <script>
+              let n = 0;
+              setInterval(() => {
+                n += 1;
+                document.getElementById('valor').textContent = String(n);
+                document.title = 'Contador ' + n;
+              }, 200);
+            </script>
+            """));
+
         await app.StartAsync();
 
         var address = app.Urls.First();

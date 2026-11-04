@@ -35,7 +35,9 @@ public sealed class AppHarness : IAsyncDisposable
     /// <summary>Endpoint CDP para <c>ConnectOverCDPAsync</c>.</summary>
     public string CdpEndpoint => $"http://127.0.0.1:{Handshake.CdpPort}";
 
-    public static async Task<AppHarness> StartAsync(string? initialUrl = null)
+    public static async Task<AppHarness> StartAsync(
+        string? initialUrl = null,
+        TimeSpan? hibernateAfter = null)
     {
         var executable = ResolveExecutable();
         var handshakeFile = Path.Combine(
@@ -56,6 +58,14 @@ public sealed class AppHarness : IAsyncDisposable
         {
             startInfo.ArgumentList.Add(LaunchOptions.UrlFlag);
             startInfo.ArgumentList.Add(initialUrl);
+        }
+
+        if (hibernateAfter is { } threshold)
+        {
+            // Evita que o teste espere cinco minutos de verdade.
+            startInfo.ArgumentList.Add(LaunchOptions.HibernateAfterFlag);
+            startInfo.ArgumentList.Add(
+                threshold.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         var process = Process.Start(startInfo)
@@ -101,6 +111,9 @@ public sealed class AppHarness : IAsyncDisposable
 
     /// <summary>Dispara o atalho pelo mesmo despacho de teclas do teclado real.</summary>
     public Task<string> HotkeyAsync(string name) => SendAsync("hotkey " + name);
+
+    /// <summary>Forca a avaliacao da politica de hibernacao agora.</summary>
+    public Task<string> HibernateTickAsync() => SendAsync("hibernate-tick");
 
     /// <summary>Espera uma condicao da casca, com timeout: a navegacao e assincrona.</summary>
     public async Task<AutomationState> WaitForStateAsync(

@@ -40,9 +40,13 @@ public sealed class WebContentTests
         var page = await ResolvePageAsync(browser);
 
         await app.NavigateAsync(fixtures.Url("/dois"));
-        await page.WaitForURLAsync(url => url.Contains("/dois", StringComparison.Ordinal));
 
-        Assert.Equal("Pagina Dois", await page.Locator("#titulo").InnerTextAsync());
+        // Re-resolve a pagina a cada tentativa em vez de usar WaitForURLAsync: o
+        // WebView2 pode trocar o alvo de CDP ao navegar, e o handle antigo entao
+        // nunca ve a nova URL.
+        var destino = await WaitForPageAsync(browser, "/dois");
+
+        Assert.Equal("Pagina Dois", await destino.Locator("#titulo").InnerTextAsync());
     }
 
     [Fact]
@@ -67,6 +71,28 @@ public sealed class WebContentTests
         // o teste de isolamento entre containers nao teria o que comparar.
         Assert.Equal(noDom, noLocalStorage);
         Assert.NotEmpty(noDom);
+    }
+
+    /// <summary>Espera aparecer uma pagina cuja URL contenha o trecho informado.</summary>
+    private static async Task<IPage> WaitForPageAsync(IBrowser browser, string urlPart)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var page = browser.Contexts
+                .SelectMany(context => context.Pages)
+                .FirstOrDefault(p => p.Url.Contains(urlPart, StringComparison.Ordinal));
+
+            if (page is not null)
+            {
+                return page;
+            }
+
+            await Task.Delay(150);
+        }
+
+        throw new TimeoutException($"Nenhuma pagina com '{urlPart}' apareceu no WebView2.");
     }
 
     /// <summary>

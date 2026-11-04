@@ -89,6 +89,19 @@ public sealed class AppHarness : IAsyncDisposable
 
     public Task<string> ReloadAsync() => SendAsync("reload");
 
+    public Task<string> NewTabAsync(string container, string url) =>
+        SendAsync($"new-tab {container} {url}");
+
+    public Task<string> CloseTabAsync(int index) => SendAsync("close-tab " + index);
+
+    public Task<string> SelectTabAsync(int index) => SendAsync("select-tab " + index);
+
+    public Task<string> PinTabAsync(int index, bool pinned) =>
+        SendAsync($"pin {index} {pinned.ToString().ToLowerInvariant()}");
+
+    /// <summary>Dispara o atalho pelo mesmo despacho de teclas do teclado real.</summary>
+    public Task<string> HotkeyAsync(string name) => SendAsync("hotkey " + name);
+
     /// <summary>Espera uma condicao da casca, com timeout: a navegacao e assincrona.</summary>
     public async Task<AutomationState> WaitForStateAsync(
         Func<AutomationState, bool> condition,

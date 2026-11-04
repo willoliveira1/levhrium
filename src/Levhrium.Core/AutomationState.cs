@@ -27,7 +27,13 @@ public sealed record AutomationTab
     /// <summary>Container (perfil do WebView2) ao qual a aba pertence.</summary>
     public required string Container { get; init; }
 
+    /// <summary>Cor do selo do container, em ARGB.</summary>
+    public required int ContainerColor { get; init; }
+
     public required bool CanGoBack { get; init; }
     public required bool CanGoForward { get; init; }
     public required bool IsLoading { get; init; }
+
+    /// <summary>Aba fixada: isenta de hibernacao.</summary>
+    public required bool Pinned { get; init; }
 }

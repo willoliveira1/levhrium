@@ -5,8 +5,9 @@ using Microsoft.Web.WebView2.WinForms;
 namespace Levhrium.App;
 
 /// <summary>
-/// Uma aba: um controle WebView2 amarrado a um container. No M1 existe sempre
-/// uma so; a colecao de abas e a faixa desenhada chegam no M2.
+/// A parte viva de uma aba: o controle WebView2 amarrado ao container do
+/// <see cref="TabModel"/>. O modelo vive no nucleo; aqui fica so o que precisa
+/// de janela.
 /// </summary>
 internal sealed class BrowserTab : IDisposable
 {
@@ -15,9 +16,9 @@ internal sealed class BrowserTab : IDisposable
 
     private bool _isLoading;
 
-    internal BrowserTab(string container, CoreWebView2CreationProperties creationProperties)
+    internal BrowserTab(TabModel model, CoreWebView2CreationProperties creationProperties)
     {
-        Container = container;
+        Model = model;
 
         View = new WebView2
         {
@@ -31,13 +32,12 @@ internal sealed class BrowserTab : IDisposable
         View.NavigationStarting += (_, _) => SetLoading(true);
         View.NavigationCompleted += (_, _) => SetLoading(false);
         View.SourceChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
-        View.CoreWebView2InitializationCompleted += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Disparado quando algo exibido na toolbar muda (URL, titulo, carregamento).</summary>
+    /// <summary>Disparado quando algo exibido na aba ou na toolbar muda.</summary>
     internal event EventHandler? Changed;
 
-    internal string Container { get; }
+    internal TabModel Model { get; }
 
     internal WebView2 View { get; }
 
@@ -53,16 +53,6 @@ internal sealed class BrowserTab : IDisposable
     internal bool CanGoForward => View.CoreWebView2?.CanGoForward ?? false;
 
     internal bool IsLoading => _isLoading;
-
-    internal AutomationTab ToAutomationTab() => new()
-    {
-        Url = Url,
-        Title = Title,
-        Container = Container,
-        CanGoBack = CanGoBack,
-        CanGoForward = CanGoForward,
-        IsLoading = IsLoading,
-    };
 
     internal async Task EnsureInitializedAsync()
     {
@@ -94,10 +84,7 @@ internal sealed class BrowserTab : IDisposable
 
     internal void Reload() => View.CoreWebView2?.Reload();
 
-    public void Dispose()
-    {
-        View.Dispose();
-    }
+    public void Dispose() => View.Dispose();
 
     private void OnInitializationCompleted(object? sender, CoreWebView2InitializationCompletedEventArgs e)
     {
@@ -114,14 +101,14 @@ internal sealed class BrowserTab : IDisposable
         // Ctrl+W seriam engolidos pelo WebView2 antes de chegarem ao form.
         settings.AreBrowserAcceleratorKeysEnabled = false;
 
-        // O menu de contexto do Edge some no M2, quando tivermos o nosso (com
-        // "abrir em container"). DevTools fica: vem de graca e esta no escopo da v1.
+        // DevTools esta no escopo da v1 e vem de graca no WebView2.
         settings.AreDevToolsEnabled = true;
 
         core.DocumentTitleChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
         core.HistoryChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
 
         _ready.TrySetResult();
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     private void SetLoading(bool value)

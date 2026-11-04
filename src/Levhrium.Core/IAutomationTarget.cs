@@ -17,4 +17,19 @@ public interface IAutomationTarget
     Task GoForwardAsync();
 
     Task ReloadAsync();
+
+    /// <summary>Abre uma aba no container informado.</summary>
+    Task NewTabAsync(string container, string url);
+
+    Task CloseTabAsync(int index);
+
+    Task SelectTabAsync(int index);
+
+    Task PinTabAsync(int index, bool pinned);
+
+    /// <summary>
+    /// Dispara um atalho pelo mesmo despacho de teclas que o teclado usa, para que
+    /// o teste prove a ligacao real e nao um atalho de codigo.
+    /// </summary>
+    Task HotkeyAsync(string name);
 }

@@ -168,6 +168,44 @@ internal sealed class AutomationServer : IDisposable
                     await _target.ReloadAsync().ConfigureAwait(false);
                     return Ok();
 
+                case "new-tab":
+                    // new-tab <container> <url>. Corta no ultimo espaco, nao no
+                    // primeiro: nome de container tem espaco ("Conta 2"), URL nao.
+                    var cut = argument.LastIndexOf(' ');
+                    if (cut <= 0)
+                    {
+                        return Error("new-tab exige <container> <url>");
+                    }
+
+                    await _target
+                        .NewTabAsync(argument[..cut].Trim(), argument[(cut + 1)..].Trim())
+                        .ConfigureAwait(false);
+                    return Ok();
+
+                case "close-tab":
+                    await _target.CloseTabAsync(ParseIndex(argument)).ConfigureAwait(false);
+                    return Ok();
+
+                case "select-tab":
+                    await _target.SelectTabAsync(ParseIndex(argument)).ConfigureAwait(false);
+                    return Ok();
+
+                case "pin":
+                    // pin <indice> <true|false>
+                    var pinArgs = argument.Split(' ', 2, StringSplitOptions.TrimEntries);
+                    var pinned = pinArgs.Length < 2 || bool.Parse(pinArgs[1]);
+                    await _target.PinTabAsync(ParseIndex(pinArgs[0]), pinned).ConfigureAwait(false);
+                    return Ok();
+
+                case "hotkey":
+                    if (argument.Length == 0)
+                    {
+                        return Error("hotkey exige um nome");
+                    }
+
+                    await _target.HotkeyAsync(argument).ConfigureAwait(false);
+                    return Ok();
+
                 default:
                     return Error("comando desconhecido: " + command);
             }
@@ -177,6 +215,11 @@ internal sealed class AutomationServer : IDisposable
             return Error(ex.Message);
         }
     }
+
+    private static int ParseIndex(string argument) =>
+        int.TryParse(argument, out var index)
+            ? index
+            : throw new ArgumentException("Indice invalido: " + argument, nameof(argument));
 
     private static string Ok() => """{"ok":true}""";
 

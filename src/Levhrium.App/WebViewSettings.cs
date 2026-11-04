@@ -6,13 +6,10 @@ namespace Levhrium.App;
 /// <summary>
 /// Monta as propriedades de criacao de cada WebView2. Todas apontam para a mesma
 /// pasta de dados do usuario -- e isso que faz os containers compartilharem um
-/// processo de browser, em vez de subir um por container.
+/// processo de browser, em vez de subir um runtime por container.
 /// </summary>
 internal sealed class WebViewSettings
 {
-    /// <summary>Container usado quando a aba nao pede outro.</summary>
-    internal const string DefaultContainer = "padrao";
-
     private readonly LaunchOptions _options;
     private readonly AppPaths _paths;
 
@@ -22,15 +19,15 @@ internal sealed class WebViewSettings
         _paths = paths;
     }
 
-    internal CoreWebView2CreationProperties For(string container)
+    internal CoreWebView2CreationProperties For(Container container)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(container);
+        ArgumentNullException.ThrowIfNull(container);
         _paths.EnsureCreated();
 
         return new CoreWebView2CreationProperties
         {
             UserDataFolder = _paths.WebView2Folder,
-            ProfileName = container,
+            ProfileName = container.ProfileName,
             AdditionalBrowserArguments = BuildBrowserArguments(),
         };
     }

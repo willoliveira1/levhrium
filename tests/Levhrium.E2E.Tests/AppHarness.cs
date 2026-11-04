@@ -37,7 +37,8 @@ public sealed class AppHarness : IAsyncDisposable
 
     public static async Task<AppHarness> StartAsync(
         string? initialUrl = null,
-        TimeSpan? hibernateAfter = null)
+        TimeSpan? hibernateAfter = null,
+        string? blocklistPath = null)
     {
         var executable = ResolveExecutable();
         var handshakeFile = Path.Combine(
@@ -58,6 +59,12 @@ public sealed class AppHarness : IAsyncDisposable
         {
             startInfo.ArgumentList.Add(LaunchOptions.UrlFlag);
             startInfo.ArgumentList.Add(initialUrl);
+        }
+
+        if (blocklistPath is { Length: > 0 })
+        {
+            startInfo.ArgumentList.Add(LaunchOptions.BlocklistFlag);
+            startInfo.ArgumentList.Add(blocklistPath);
         }
 
         if (hibernateAfter is { } threshold)

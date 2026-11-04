@@ -24,6 +24,9 @@ public sealed class AppPaths
     /// <summary>Sessao, favoritos, historico e pilha de abas fechadas.</summary>
     public string StateFile => Path.Combine(RootFolder, "state.json");
 
+    /// <summary>Arquivo hosts opcional do usuario, somado a lista embutida.</summary>
+    public string BlocklistFile => Path.Combine(RootFolder, "blocklist.txt");
+
     /// <summary>Verdadeiro so para as pastas temporarias de teste, que podem ser apagadas.</summary>
     public bool IsDisposable { get; }
 

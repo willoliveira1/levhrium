@@ -15,12 +15,21 @@ namespace Levhrium.E2E.Tests;
 public sealed class FixtureServer : IAsyncDisposable
 {
     private readonly WebApplication _app;
+    private readonly RequestLog _log;
 
-    private FixtureServer(WebApplication app, string baseAddress)
+    private FixtureServer(WebApplication app, string baseAddress, RequestLog log)
     {
         _app = app;
         BaseAddress = baseAddress;
+        _log = log;
     }
+
+    /// <summary>
+    /// Quantas vezes o servidor recebeu o caminho. Uma requisicao bloqueada nunca
+    /// chega ate aqui -- e assim que o teste prova o bloqueio, em vez de confiar
+    /// so no contador do proprio navegador.
+    /// </summary>
+    public int HitsFor(string path) => _log.Count(path);
 
     /// <summary>Endereco raiz, com porta sorteada pelo sistema.</summary>
     public string BaseAddress { get; }
@@ -33,7 +42,15 @@ public sealed class FixtureServer : IAsyncDisposable
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
 
+        var log = new RequestLog();
+        builder.Services.AddSingleton(log);
+
         var app = builder.Build();
+        app.Use(async (context, next) =>
+        {
+            log.Record(context.Request.Path.Value ?? string.Empty);
+            await next();
+        });
 
         app.MapGet("/um", () => Page("Pagina Um", "<h1 id=\"titulo\">Pagina Um</h1>"));
         app.MapGet("/dois", () => Page("Pagina Dois", "<h1 id=\"titulo\">Pagina Dois</h1>"));
@@ -80,16 +97,61 @@ public sealed class FixtureServer : IAsyncDisposable
             </script>
             """));
 
+        // Fixture de bloqueio: a pagina vem de 127.0.0.1 e pede dois recursos --
+        // um do mesmo host (permitido) e um de "localhost", host diferente que o
+        // teste poe na lista de bloqueio. Mesmo servidor, hosts distintos.
+        app.MapGet("/pagina-com-anuncio", (HttpContext context) =>
+        {
+            var port = context.Request.Host.Port ?? 80;
+
+            return Page(
+                "Pagina Com Anuncio",
+                $"""
+                <h1 id="titulo">Pagina Com Anuncio</h1>
+                <img id="permitido" src="http://127.0.0.1:{port}/recurso-permitido.png">
+                <img id="anuncio" src="http://localhost:{port}/recurso-anuncio.png">
+                """);
+        });
+
+        app.MapGet("/recurso-permitido.png", () => Results.Bytes(TransparentPixel, "image/png"));
+        app.MapGet("/recurso-anuncio.png", () => Results.Bytes(TransparentPixel, "image/png"));
+
         await app.StartAsync();
 
         var address = app.Urls.First();
-        return new FixtureServer(app, address);
+        return new FixtureServer(app, address, log);
     }
 
     public async ValueTask DisposeAsync()
     {
         await _app.StopAsync();
         await _app.DisposeAsync();
+    }
+
+    /// <summary>PNG 1x1 transparente, o menor recurso valido possivel.</summary>
+    private static readonly byte[] TransparentPixel = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+
+    private sealed class RequestLog
+    {
+        private readonly Dictionary<string, int> _hits = [];
+        private readonly Lock _gate = new();
+
+        public void Record(string path)
+        {
+            lock (_gate)
+            {
+                _hits[path] = _hits.GetValueOrDefault(path) + 1;
+            }
+        }
+
+        public int Count(string path)
+        {
+            lock (_gate)
+            {
+                return _hits.GetValueOrDefault(path);
+            }
+        }
     }
 
     private static IResult Page(string title, string body) => Results.Content(

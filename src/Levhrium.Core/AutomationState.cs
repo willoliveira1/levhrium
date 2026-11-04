@@ -16,6 +16,9 @@ public sealed record AutomationState
     /// Playwright enxerga o DOM da pagina, nunca a barra.
     /// </summary>
     public required string AddressBarText { get; init; }
+
+    /// <summary>Quantos dominios a lista de bloqueio carregou.</summary>
+    public required int BlocklistSize { get; init; }
 }
 
 /// <summary>Uma aba, como a automacao a enxerga.</summary>
@@ -39,4 +42,7 @@ public sealed record AutomationTab
 
     /// <summary>Renderer congelado por TrySuspend.</summary>
     public required bool Suspended { get; init; }
+
+    /// <summary>Requisicoes recusadas pela lista de dominios nesta aba.</summary>
+    public required int BlockedRequests { get; init; }
 }

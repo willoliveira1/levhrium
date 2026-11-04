@@ -18,6 +18,7 @@ internal sealed class MainForm : Form, IAutomationTarget
     private readonly TabSession _session;
     private readonly HibernationPolicy _hibernationPolicy;
     private readonly HibernationService _hibernation;
+    private readonly DomainBlocklist _blocklist;
     private readonly Dictionary<Guid, BrowserTab> _views = [];
 
     private readonly TabStrip _tabStrip;
@@ -26,6 +27,8 @@ internal sealed class MainForm : Form, IAutomationTarget
     private readonly Button _forward;
     private readonly Button _reload;
     private readonly TextBox _address;
+    private readonly Label _blockedIcon;
+    private readonly Label _blockedCounter;
     private readonly Panel _content;
 
     private readonly TaskCompletionSource _ready =
@@ -41,6 +44,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         _session = new TabSession(new ContainerRegistry());
         _hibernationPolicy = new HibernationPolicy(options.IdleThreshold);
         _hibernation = new HibernationService(_session, _hibernationPolicy, id => _views.GetValueOrDefault(id));
+        _blocklist = DomainBlocklist.LoadOrSeed(options.BlocklistPath ?? paths.BlocklistFile);
 
         Text = AppPaths.ProductName;
         BackColor = Theme.WindowBackground;
@@ -63,6 +67,30 @@ internal sealed class MainForm : Form, IAutomationTarget
             Height = 26,
         };
 
+        // Dois rotulos: o escudo precisa da fonte de icones, mas digitos nao
+        // existem nela -- o numero fica num rotulo de texto normal ao lado.
+        _blockedIcon = new Label
+        {
+            AutoSize = false,
+            Width = 20,
+            Height = 26,
+            TextAlign = ContentAlignment.MiddleRight,
+            ForeColor = Theme.ForegroundDim,
+            BackColor = Theme.ToolbarBackground,
+            Font = new Font("Segoe MDL2 Assets", 10f),
+        };
+
+        _blockedCounter = new Label
+        {
+            AutoSize = false,
+            Width = 36,
+            Height = 26,
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = Theme.ForegroundDim,
+            BackColor = Theme.ToolbarBackground,
+            Font = new Font("Segoe UI", 9f),
+        };
+
         _toolbar = new Panel
         {
             Dock = DockStyle.Top,
@@ -83,6 +111,8 @@ internal sealed class MainForm : Form, IAutomationTarget
         _toolbar.Controls.Add(_forward);
         _toolbar.Controls.Add(_reload);
         _toolbar.Controls.Add(_address);
+        _toolbar.Controls.Add(_blockedIcon);
+        _toolbar.Controls.Add(_blockedCounter);
         _toolbar.Resize += (_, _) => LayoutToolbar();
 
         // Ordem importa: o Fill entra primeiro, os Top empilham por cima.
@@ -101,6 +131,10 @@ internal sealed class MainForm : Form, IAutomationTarget
         _tabStrip.NewTabRequested += (_, _) => _ = OpenTabAsync(ContainerRegistry.DefaultName, HomeUrl);
         _tabStrip.ContainerMenuRequested += (_, point) => ShowContainerMenu(point);
         _tabStrip.TabMoved += (_, move) => _session.Move(move.From, move.To);
+
+        var blockedTip = new ToolTip();
+        blockedTip.SetToolTip(_blockedIcon, "Requisicoes bloqueadas pela lista de dominios");
+        blockedTip.SetToolTip(_blockedCounter, "Requisicoes bloqueadas pela lista de dominios");
 
         _session.ActiveChanged += (_, _) => OnActiveTabChanged();
         _session.OrderChanged += (_, _) => _tabStrip.Invalidate();
@@ -211,7 +245,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         // progredir, e a fixacao deixa a protecao visivel na faixa de abas.
         model.Pinned = _hibernationPolicy.ShouldPinOnOpen(url);
 
-        var view = new BrowserTab(model, _webViewSettings.For(model.Container));
+        var view = new BrowserTab(model, _webViewSettings.For(model.Container), _blocklist);
         view.Changed += (_, _) => OnTabContentChanged(model.Id);
 
         _views[model.Id] = view;
@@ -283,7 +317,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         }
 
         // O modelo ja voltou para a sessao; falta criar a view no mesmo container.
-        var view = new BrowserTab(restored, _webViewSettings.For(restored.Container));
+        var view = new BrowserTab(restored, _webViewSettings.For(restored.Container), _blocklist);
         view.Changed += (_, _) => OnTabContentChanged(restored.Id);
 
         _views[restored.Id] = view;
@@ -457,8 +491,19 @@ internal sealed class MainForm : Form, IAutomationTarget
         }
 
         x += gap;
+        var counterWidth = _blockedIcon.Width + _blockedCounter.Width + gap;
         _address.Location = new Point(x, (ToolbarHeight - _address.Height) / 2);
-        _address.Width = Math.Max(120, _toolbar.ClientSize.Width - x - _toolbar.Padding.Right);
+        _address.Width = Math.Max(
+            120,
+            _toolbar.ClientSize.Width - x - _toolbar.Padding.Right - counterWidth);
+
+        _blockedIcon.Location = new Point(
+            _address.Right + gap,
+            (ToolbarHeight - _blockedIcon.Height) / 2);
+
+        _blockedCounter.Location = new Point(
+            _blockedIcon.Right,
+            (ToolbarHeight - _blockedCounter.Height) / 2);
     }
 
     private void OnAddressKeyDown(object? sender, KeyEventArgs e)
@@ -490,6 +535,13 @@ internal sealed class MainForm : Form, IAutomationTarget
         _forward.ForeColor = _forward.Enabled ? Theme.Foreground : Theme.ForegroundDim;
         _reload.Text = view?.IsLoading == true ? "×" : "↻";
 
+        // Contador de bloqueios da aba ativa: a prova visivel de que a lista age.
+        var blocked = view?.BlockedRequests ?? 0;
+        _blockedIcon.Text = blocked > 0 ? "" : string.Empty;
+        _blockedCounter.Text = blocked > 0
+            ? blocked.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : string.Empty;
+
         var container = _session.Active?.Container;
         Text = _session.Active?.Title is { Length: > 0 } title
             ? $"{title} — {container?.Name} — {AppPaths.ProductName}"
@@ -516,6 +568,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         Tabs = [.. _session.Tabs.Select(ToAutomationTab)],
         ActiveTabIndex = _session.ActiveIndex,
         AddressBarText = _address.Text,
+        BlocklistSize = _blocklist.Count,
     });
 
     public Task NavigateAsync(string input) => OnUiAction(() =>
@@ -609,6 +662,7 @@ internal sealed class MainForm : Form, IAutomationTarget
             IsLoading = view?.IsLoading ?? false,
             Pinned = model.Pinned,
             Suspended = view?.IsSuspended ?? model.Suspended,
+            BlockedRequests = view?.BlockedRequests ?? 0,
         };
     }
 

@@ -16,9 +16,15 @@ internal sealed class BrowserTab : IDisposable
 
     private bool _isLoading;
 
-    internal BrowserTab(TabModel model, CoreWebView2CreationProperties creationProperties)
+    private readonly DomainBlocklist _blocklist;
+
+    internal BrowserTab(
+        TabModel model,
+        CoreWebView2CreationProperties creationProperties,
+        DomainBlocklist blocklist)
     {
         Model = model;
+        _blocklist = blocklist;
 
         View = new WebView2
         {
@@ -56,6 +62,9 @@ internal sealed class BrowserTab : IDisposable
 
     /// <summary>Renderer congelado por <see cref="TrySuspendAsync"/>.</summary>
     internal bool IsSuspended { get; private set; }
+
+    /// <summary>Quantas requisicoes esta aba ja recusou pela lista de dominios.</summary>
+    internal int BlockedRequests { get; private set; }
 
     internal async Task EnsureInitializedAsync()
     {
@@ -152,7 +161,38 @@ internal sealed class BrowserTab : IDisposable
         core.DocumentTitleChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
         core.HistoryChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
 
+        // Bloqueio por dominio direto no nativo: sem extensao e sem renderer extra.
+        if (_blocklist.Count > 0)
+        {
+            core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+            core.WebResourceRequested += OnWebResourceRequested;
+        }
+
         _ready.TrySetResult();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Recusa requisicoes para dominios da lista devolvendo 403 vazio. Nunca
+    /// bloqueia o documento principal: isso transformaria um dominio listado
+    /// numa pagina em branco sem explicacao.
+    /// </summary>
+    private void OnWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        var isDocument = e.ResourceContext == CoreWebView2WebResourceContext.Document;
+
+        if (!_blocklist.ShouldBlock(e.Request.Uri, isDocument))
+        {
+            return;
+        }
+
+        e.Response = View.CoreWebView2!.Environment.CreateWebResourceResponse(
+            Content: null,
+            StatusCode: 403,
+            ReasonPhrase: "Blocked by Levhrium",
+            Headers: string.Empty);
+
+        BlockedRequests++;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 

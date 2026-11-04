@@ -18,13 +18,17 @@ public sealed class LaunchOptions
     /// <summary>Segundos de ociosidade antes de hibernar; 0 desliga a hibernacao.</summary>
     public const string HibernateAfterFlag = "--hibernate-after";
 
+    /// <summary>Arquivo hosts a somar a lista de bloqueio embutida.</summary>
+    public const string BlocklistFlag = "--blocklist";
+
     private LaunchOptions(
         bool testMode,
         string? initialUrl,
         string instanceId,
         int cdpPort,
         string? handshakeFilePath,
-        TimeSpan idleThreshold)
+        TimeSpan idleThreshold,
+        string? blocklistPath)
     {
         TestMode = testMode;
         InitialUrl = initialUrl;
@@ -32,6 +36,7 @@ public sealed class LaunchOptions
         CdpPort = cdpPort;
         HandshakeFilePath = handshakeFilePath;
         IdleThreshold = idleThreshold;
+        BlocklistPath = blocklistPath;
     }
 
     public bool TestMode { get; }
@@ -57,6 +62,12 @@ public sealed class LaunchOptions
     /// </summary>
     public TimeSpan IdleThreshold { get; }
 
+    /// <summary>
+    /// Arquivo hosts extra. Quando nulo, usa blocklist.txt da pasta de dados se
+    /// existir; de todo jeito a semente embutida sempre entra.
+    /// </summary>
+    public string? BlocklistPath { get; }
+
     /// <summary>Nome do named pipe de automacao desta instancia.</summary>
     public string AutomationPipeName => $"{AppPaths.ProductName}-test-{InstanceId}";
 
@@ -71,6 +82,7 @@ public sealed class LaunchOptions
         string? url = null;
         string? handshake = null;
         var idleThreshold = HibernationPolicy.DefaultIdleThreshold;
+        string? blocklist = null;
 
         for (var i = 0; i < args.Count; i++)
         {
@@ -85,6 +97,10 @@ public sealed class LaunchOptions
             else if (string.Equals(args[i], HandshakeFlag, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
             {
                 handshake = args[++i];
+            }
+            else if (string.Equals(args[i], BlocklistFlag, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
+            {
+                blocklist = args[++i];
             }
             else if (string.Equals(args[i], HibernateAfterFlag, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count
                      && double.TryParse(args[++i], System.Globalization.CultureInfo.InvariantCulture, out var seconds))
@@ -103,8 +119,8 @@ public sealed class LaunchOptions
 #endif
 
         return testMode
-            ? new LaunchOptions(true, url, Guid.NewGuid().ToString("n")[..12], FindFreePort(), handshake, idleThreshold)
-            : new LaunchOptions(false, url, string.Empty, 0, handshakeFilePath: null, idleThreshold);
+            ? new LaunchOptions(true, url, Guid.NewGuid().ToString("n")[..12], FindFreePort(), handshake, idleThreshold, blocklist)
+            : new LaunchOptions(false, url, string.Empty, 0, handshakeFilePath: null, idleThreshold, blocklist);
     }
 
     /// <summary>

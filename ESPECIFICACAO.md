@@ -174,10 +174,17 @@ errada, e lá dá para testar sem abrir janela. O controle desenha a partir dela
 não há uma segunda conta paralela.
 
 O baseline visual é deliberadamente pequeno: comparação de pixel é frágil a DPI,
-fonte e tema. Recorta só a barra de título e a faixa de abas — a barra de endereço
-fica de fora porque mostra a porta sorteada do servidor de fixture. Tolerância de
-2% dos pixels. Referência ausente é gerada e o teste falha pedindo conferência a
-olho antes de versionar.
+fonte e tema. Recorta **só a faixa de abas, em coordenadas da área de cliente**.
+Duas coisas ficam de fora de propósito, e as duas foram descobertas pelo próprio
+baseline reprovando:
+
+- **A barra de título**, porque o Windows a pinta de azul quando a janela tem foco
+  e de cinza quando não tem — a referência passava sozinha e reprovava quando
+  rodava junto com a bateria, em que outra janela ficava na frente.
+- **A barra de endereço**, porque mostra a porta sorteada do servidor de fixture.
+
+Tolerância de 2% dos pixels. Referência ausente é gerada e o teste falha pedindo
+conferência a olho antes de versionar.
 
 O Playwright dirige o DOM dentro das abas, mas **não alcança a casca** (GDI+ não é DOM,
 e faixa de abas custom-desenhada não existe na árvore de UI Automation). Daí o pipe.
@@ -270,7 +277,7 @@ Arquivos de ferramentas de IA e de sessão estão no `.gitignore`.
 
 ```
 dotnet build -c Debug
-dotnet test                 # 101 unitários + 40 de integração/UI
+dotnet test                 # 154 unitários + 49 de integração/UI/visual
 dotnet run --project src/Levhrium.App
 dotnet run --project src/Levhrium.App -- --url https://poke.sigmaproject.online/play
 ```

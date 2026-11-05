@@ -102,7 +102,7 @@ instalador, também do [Inno Setup 6](https://jrsoftware.org/isinfo.php)
 
 ```powershell
 dotnet build -c Release
-dotnet test                                   # 131 unitários + 40 de integração/UI
+dotnet test                                   # 154 unitários + 49 de integração/UI/visual
 dotnet test tests/Levhrium.Core.Tests -c Release   # trava de segurança dos hooks de teste
 .\build.ps1                                   # publica e gera dist/Levhrium-Setup-<versão>.exe
 ```

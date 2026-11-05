@@ -17,6 +17,12 @@ internal static partial class WindowCapture
     /// <summary>PW_RENDERFULLCONTENT: necessario para conteudo composto por GPU.</summary>
     private const uint RenderFullContent = 2;
 
+    /// <summary>
+    /// Captura a area de cliente, nao a janela inteira. A moldura fica de fora
+    /// de proposito: o Windows pinta a barra de titulo de azul quando a janela
+    /// tem foco e de cinza quando nao tem, e isso tornaria qualquer referencia
+    /// visual dependente de quem esta em primeiro plano.
+    /// </summary>
     internal static Bitmap Capture(Process process, Rectangle? crop = null)
     {
         process.Refresh();
@@ -27,10 +33,23 @@ internal static partial class WindowCapture
             throw new InvalidOperationException("O processo nao tem janela principal.");
         }
 
-        if (!GetWindowRect(handle, out var rect))
+        if (!GetWindowRect(handle, out var rect) || !GetClientRect(handle, out var client))
         {
             throw new InvalidOperationException("Nao consegui medir a janela.");
         }
+
+        // Canto superior esquerdo da area de cliente, em coordenadas da janela.
+        var origin = new Point { X = 0, Y = 0 };
+        if (!ClientToScreen(handle, ref origin))
+        {
+            throw new InvalidOperationException("Nao consegui localizar a area de cliente.");
+        }
+
+        var clientOffset = new Rectangle(
+            origin.X - rect.Left,
+            origin.Y - rect.Top,
+            client.Right - client.Left,
+            client.Bottom - client.Top);
 
         var width = rect.Right - rect.Left;
         var height = rect.Bottom - rect.Top;
@@ -51,14 +70,24 @@ internal static partial class WindowCapture
             }
         }
 
-        if (crop is not { } area)
-        {
-            return full;
-        }
-
         using (full)
         {
+            // O recorte pedido e relativo a area de cliente, nao a janela.
+            var area = crop is { } requested
+                ? new Rectangle(
+                    clientOffset.X + requested.X,
+                    clientOffset.Y + requested.Y,
+                    requested.Width,
+                    requested.Height)
+                : clientOffset;
+
             var bounded = Rectangle.Intersect(area, new Rectangle(0, 0, width, height));
+
+            if (bounded.Width <= 0 || bounded.Height <= 0)
+            {
+                throw new InvalidOperationException("O recorte caiu fora da janela.");
+            }
+
             return full.Clone(bounded, full.PixelFormat);
         }
     }
@@ -103,7 +132,22 @@ internal static partial class WindowCapture
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetClientRect(IntPtr window, out Rect rect);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool ClientToScreen(IntPtr window, ref Point point);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool PrintWindow(IntPtr window, IntPtr deviceContext, uint flags);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Point
+    {
+        public int X;
+        public int Y;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Rect

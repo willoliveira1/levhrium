@@ -39,6 +39,7 @@ internal sealed class MainForm : Form, IAutomationTarget
     /// <summary>Diagnostico do menu de link; ver AutomationState.</summary>
     private int _linkMenusCustomized;
     private readonly Dictionary<Guid, BrowserTab> _views = [];
+    private readonly Dictionary<Keys, Action> _hotkeys;
 
     private readonly TabStrip _tabStrip;
     private readonly Panel _toolbar;
@@ -185,6 +186,8 @@ internal sealed class MainForm : Form, IAutomationTarget
 
         _session.ActiveChanged += (_, _) => OnActiveTabChanged();
         _session.OrderChanged += (_, _) => _tabStrip.Invalidate();
+
+        _hotkeys = BuildHotkeys();
     }
 
     /// <summary>Completa quando a primeira aba esta pronta para navegar.</summary>
@@ -230,85 +233,56 @@ internal sealed class MainForm : Form, IAutomationTarget
         TryHandleHotkey(keyData) || base.ProcessCmdKey(ref msg, keyData);
 
     /// <summary>
-    /// Tabela unica de atalhos, usada pelos dois caminhos de teclado. Devolve
-    /// true quando a tecla e nossa e nao deve seguir para a pagina.
+    /// Tabela unica de atalhos, construida uma vez. Ser uma so e o ponto: antes
+    /// havia uma lista para executar e outra para reconhecer, e um atalho
+    /// adicionado so na primeira funcionaria pela barra de endereco e ficaria
+    /// silenciosamente morto dentro da pagina.
+    /// </summary>
+    private Dictionary<Keys, Action> BuildHotkeys() => new()
+    {
+        [Keys.Control | Keys.T] = () => _ = OpenTabAsync(ContainerRegistry.DefaultName, HomeUrl),
+        [Keys.Control | Keys.W] = CloseActiveTab,
+        [Keys.Control | Keys.Tab] = _session.ActivateNext,
+        [Keys.Control | Keys.Shift | Keys.Tab] = _session.ActivatePrevious,
+        [Keys.Control | Keys.Shift | Keys.T] = () => _ = ReopenLastClosedAsync(),
+
+        [Keys.Control | Keys.L] = () =>
+        {
+            _address.Focus();
+            _address.SelectAll();
+        },
+
+        [Keys.F5] = () => ActiveView?.Reload(),
+        [Keys.Control | Keys.R] = () => ActiveView?.Reload(),
+        [Keys.F12] = () => ActiveView?.OpenDevTools(),
+        [Keys.Alt | Keys.Left] = () => ActiveView?.GoBack(),
+        [Keys.Alt | Keys.Right] = () => ActiveView?.GoForward(),
+
+        [Keys.Control | Keys.D] = ToggleBookmark,
+        [Keys.Control | Keys.H] = () => ShowLibraryMenu(LibrarySection.History),
+        [Keys.Control | Keys.J] = () => ShowLibraryMenu(LibrarySection.Downloads),
+
+        [Keys.Control | Keys.Oemplus] = () => StepZoom(1),
+        [Keys.Control | Keys.Add] = () => StepZoom(1),
+        [Keys.Control | Keys.OemMinus] = () => StepZoom(-1),
+        [Keys.Control | Keys.Subtract] = () => StepZoom(-1),
+        [Keys.Control | Keys.D0] = ResetZoom,
+        [Keys.Control | Keys.NumPad0] = ResetZoom,
+    };
+
+    /// <summary>
+    /// Executa o atalho. Devolve true quando a tecla e nossa e nao deve seguir
+    /// para a pagina.
     /// </summary>
     internal bool TryHandleHotkey(Keys keyData)
     {
-        switch (keyData)
+        if (!_hotkeys.TryGetValue(keyData, out var action))
         {
-            case Keys.Control | Keys.T:
-                _ = OpenTabAsync(ContainerRegistry.DefaultName, HomeUrl);
-                return true;
-
-            case Keys.Control | Keys.W:
-                CloseActiveTab();
-                return true;
-
-            case Keys.Control | Keys.Tab:
-                _session.ActivateNext();
-                return true;
-
-            case Keys.Control | Keys.Shift | Keys.Tab:
-                _session.ActivatePrevious();
-                return true;
-
-            case Keys.Control | Keys.Shift | Keys.T:
-                _ = ReopenLastClosedAsync();
-                return true;
-
-            case Keys.Control | Keys.L:
-                _address.Focus();
-                _address.SelectAll();
-                return true;
-
-            case Keys.F5:
-            case Keys.Control | Keys.R:
-                ActiveView?.Reload();
-                return true;
-
-            case Keys.F12:
-                ActiveView?.OpenDevTools();
-                return true;
-
-            case Keys.Alt | Keys.Left:
-                ActiveView?.GoBack();
-                return true;
-
-            case Keys.Alt | Keys.Right:
-                ActiveView?.GoForward();
-                return true;
-
-            case Keys.Control | Keys.D:
-                ToggleBookmark();
-                return true;
-
-            case Keys.Control | Keys.H:
-                ShowLibraryMenu(LibrarySection.History);
-                return true;
-
-            case Keys.Control | Keys.J:
-                ShowLibraryMenu(LibrarySection.Downloads);
-                return true;
-
-            case Keys.Control | Keys.Oemplus:
-            case Keys.Control | Keys.Add:
-                StepZoom(1);
-                return true;
-
-            case Keys.Control | Keys.OemMinus:
-            case Keys.Control | Keys.Subtract:
-                StepZoom(-1);
-                return true;
-
-            case Keys.Control | Keys.D0:
-            case Keys.Control | Keys.NumPad0:
-                ResetZoom();
-                return true;
-
-            default:
-                return false;
+            return false;
         }
+
+        action();
+        return true;
     }
 
     // ---- Ciclo de vida das abas ----
@@ -490,33 +464,10 @@ internal sealed class MainForm : Form, IAutomationTarget
     }
 
     /// <summary>
-    /// Reconhece a tecla sem executar nada. Existe separado porque o
-    /// reconhecimento precisa ser imediato e a acao, adiada.
+    /// Reconhece a tecla sem executar nada: o evento do WebView2 bloqueia o
+    /// processo do browser, entao o reconhecimento e imediato e a acao, adiada.
     /// </summary>
-    private static bool IsOurHotkey(Keys keyData) => keyData switch
-    {
-        Keys.Control | Keys.T => true,
-        Keys.Control | Keys.W => true,
-        Keys.Control | Keys.Tab => true,
-        Keys.Control | Keys.Shift | Keys.Tab => true,
-        Keys.Control | Keys.Shift | Keys.T => true,
-        Keys.Control | Keys.L => true,
-        Keys.F5 => true,
-        Keys.F12 => true,
-        Keys.Control | Keys.R => true,
-        Keys.Alt | Keys.Left => true,
-        Keys.Alt | Keys.Right => true,
-        Keys.Control | Keys.D => true,
-        Keys.Control | Keys.H => true,
-        Keys.Control | Keys.J => true,
-        Keys.Control | Keys.Oemplus => true,
-        Keys.Control | Keys.Add => true,
-        Keys.Control | Keys.OemMinus => true,
-        Keys.Control | Keys.Subtract => true,
-        Keys.Control | Keys.D0 => true,
-        Keys.Control | Keys.NumPad0 => true,
-        _ => false,
-    };
+    private bool IsOurHotkey(Keys keyData) => _hotkeys.ContainsKey(keyData);
 
     private void OnActiveTabChanged()
     {

@@ -22,11 +22,14 @@ public sealed class VisualBaselineTests
     private const double Tolerance = 0.02;
 
     /// <summary>
-    /// So a barra de titulo e a faixa de abas. A barra de endereco fica de fora
-    /// de proposito: ela mostra a porta do servidor de fixture, que e sorteada a
-    /// cada execucao e faria a referencia mudar sozinha.
+    /// So a faixa de abas, em coordenadas da area de cliente.
+    ///
+    /// Duas coisas ficam de fora de proposito: a barra de titulo, porque o
+    /// Windows a pinta de azul ou cinza conforme a janela tenha foco; e a barra
+    /// de endereco, porque mostra a porta sorteada do servidor de fixture. As
+    /// duas fariam a referencia mudar sozinha.
     /// </summary>
-    private static readonly Rectangle Strip = new(0, 0, 1196, 70);
+    private static readonly Rectangle Strip = new(0, 0, 1180, 36);
 
     [Fact]
     public async Task FaixaDeAbasComTresContainers()

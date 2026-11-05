@@ -9,7 +9,7 @@ namespace Levhrium.App;
 /// </summary>
 internal sealed class MainForm : Form, IAutomationTarget
 {
-    private const int ToolbarHeight = 44;
+    private const int ToolbarHeight = 46;
     private const string HomeUrl = "about:blank";
 
     private readonly LaunchOptions _options;
@@ -46,13 +46,11 @@ internal sealed class MainForm : Form, IAutomationTarget
 
     private readonly TabStrip _tabStrip;
     private readonly Panel _toolbar;
-    private readonly Button _back;
-    private readonly Button _forward;
-    private readonly Button _reload;
-    private readonly Button _libraryButton;
-    private readonly TextBox _address;
-    private readonly Label _blockedIcon;
-    private readonly Label _blockedCounter;
+    private readonly IconButton _back;
+    private readonly IconButton _forward;
+    private readonly IconButton _reload;
+    private readonly IconButton _libraryButton;
+    private readonly AddressBar _address;
     private readonly Panel _content;
 
     private readonly TaskCompletionSource _ready =
@@ -104,43 +102,14 @@ internal sealed class MainForm : Form, IAutomationTarget
         StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
 
-        _back = CreateToolbarButton("←", "Voltar (Alt+Seta esquerda)");
-        _forward = CreateToolbarButton("→", "Avancar (Alt+Seta direita)");
-        _reload = CreateToolbarButton("↻", "Recarregar (F5)");
-        _libraryButton = CreateToolbarButton("☰", "Favoritos, historico e downloads");
+        _back = new IconButton(Glyphs.Back, "Voltar (Alt+Seta esquerda)");
+        _forward = new IconButton(Glyphs.Forward, "Avancar (Alt+Seta direita)");
+        _reload = new IconButton(Glyphs.Reload, "Recarregar (F5)");
+        _libraryButton = new IconButton(Glyphs.Menu, "Favoritos, historico e downloads");
 
-        _address = new TextBox
-        {
-            BorderStyle = BorderStyle.FixedSingle,
-            BackColor = Theme.FieldBackground,
-            ForeColor = Theme.Foreground,
-            Font = new Font("Segoe UI", 10f),
-            Height = 26,
-        };
-
-        // Dois rotulos: o escudo precisa da fonte de icones, mas digitos nao
-        // existem nela -- o numero fica num rotulo de texto normal ao lado.
-        _blockedIcon = new Label
-        {
-            AutoSize = false,
-            Width = 20,
-            Height = 26,
-            TextAlign = ContentAlignment.MiddleRight,
-            ForeColor = Theme.ForegroundDim,
-            BackColor = Theme.ToolbarBackground,
-            Font = new Font("Segoe MDL2 Assets", 10f),
-        };
-
-        _blockedCounter = new Label
-        {
-            AutoSize = false,
-            Width = 36,
-            Height = 26,
-            TextAlign = ContentAlignment.MiddleLeft,
-            ForeColor = Theme.ForegroundDim,
-            BackColor = Theme.ToolbarBackground,
-            Font = new Font("Segoe UI", 9f),
-        };
+        _address = new AddressBar();
+        _address.Submitted += OnAddressKeyDown;
+        _address.BookmarkClicked += (_, _) => ToggleBookmark();
 
         _toolbar = new Panel
         {
@@ -163,8 +132,6 @@ internal sealed class MainForm : Form, IAutomationTarget
         _toolbar.Controls.Add(_reload);
         _toolbar.Controls.Add(_libraryButton);
         _toolbar.Controls.Add(_address);
-        _toolbar.Controls.Add(_blockedIcon);
-        _toolbar.Controls.Add(_blockedCounter);
         _toolbar.Resize += (_, _) => LayoutToolbar();
 
         // Ordem importa: o Fill entra primeiro, os Top empilham por cima.
@@ -176,18 +143,12 @@ internal sealed class MainForm : Form, IAutomationTarget
         _forward.Click += (_, _) => ActiveView?.GoForward();
         _reload.Click += (_, _) => ActiveView?.Reload();
         _libraryButton.Click += (_, _) => ShowLibraryMenu();
-        _address.KeyDown += OnAddressKeyDown;
-        _address.Enter += (_, _) => BeginInvoke(_address.SelectAll);
 
         _tabStrip.TabSelected += (_, id) => _session.Activate(id);
         _tabStrip.TabCloseRequested += (_, id) => CloseTab(id);
         _tabStrip.NewTabRequested += (_, _) => _ = OpenTabAsync(ContainerRegistry.DefaultName, HomeUrl);
         _tabStrip.ContainerMenuRequested += (_, point) => ShowContainerMenu(point);
         _tabStrip.TabMoved += (_, move) => _session.Move(move.From, move.To);
-
-        var blockedTip = new ToolTip();
-        blockedTip.SetToolTip(_blockedIcon, "Requisicoes bloqueadas pela lista de dominios");
-        blockedTip.SetToolTip(_blockedCounter, "Requisicoes bloqueadas pela lista de dominios");
 
         _session.ActiveChanged += (_, _) => OnActiveTabChanged();
         _session.OrderChanged += (_, _) => _tabStrip.Invalidate();
@@ -251,11 +212,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         [Keys.Control | Keys.Shift | Keys.Tab] = _session.ActivatePrevious,
         [Keys.Control | Keys.Shift | Keys.T] = () => _ = ReopenLastClosedAsync(),
 
-        [Keys.Control | Keys.L] = () =>
-        {
-            _address.Focus();
-            _address.SelectAll();
-        },
+        [Keys.Control | Keys.L] = _address.FocusInput,
 
         [Keys.F5] = () => ActiveView?.Reload(),
         [Keys.Control | Keys.R] = () => ActiveView?.Reload(),
@@ -602,53 +559,28 @@ internal sealed class MainForm : Form, IAutomationTarget
 
     // ---- Toolbar ----
 
-    private Button CreateToolbarButton(string glyph, string tooltip)
-    {
-        var button = new Button
-        {
-            Text = glyph,
-            Width = 32,
-            Height = 28,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Theme.ToolbarBackground,
-            ForeColor = Theme.Foreground,
-            Font = new Font("Segoe UI", 11f),
-            TabStop = false,
-        };
-
-        button.FlatAppearance.BorderSize = 0;
-        button.FlatAppearance.MouseOverBackColor = Theme.FieldBackground;
-        new ToolTip().SetToolTip(button, tooltip);
-        return button;
-    }
-
-    /// <summary>Posiciona a toolbar a mao: a barra de endereco ocupa o que sobra.</summary>
+    /// <summary>
+    /// Posiciona a toolbar a mao: os botoes circulares a esquerda, a biblioteca
+    /// a direita, e a pilula de endereco ocupando o que sobra.
+    /// </summary>
     private void LayoutToolbar()
     {
-        const int gap = 4;
-        var top = (ToolbarHeight - _back.Height) / 2;
+        const int gap = 3;
         var x = _toolbar.Padding.Left;
 
-        foreach (var button in new[] { _back, _forward, _reload, _libraryButton })
+        foreach (var button in new[] { _back, _forward, _reload })
         {
-            button.Location = new Point(x, top);
+            button.Location = new Point(x, (ToolbarHeight - button.Height) / 2);
             x += button.Width + gap;
         }
 
-        x += gap;
-        var counterWidth = _blockedIcon.Width + _blockedCounter.Width + gap;
-        _address.Location = new Point(x, (ToolbarHeight - _address.Height) / 2);
-        _address.Width = Math.Max(
-            120,
-            _toolbar.ClientSize.Width - x - _toolbar.Padding.Right - counterWidth);
+        _libraryButton.Location = new Point(
+            _toolbar.ClientSize.Width - _toolbar.Padding.Right - _libraryButton.Width,
+            (ToolbarHeight - _libraryButton.Height) / 2);
 
-        _blockedIcon.Location = new Point(
-            _address.Right + gap,
-            (ToolbarHeight - _blockedIcon.Height) / 2);
-
-        _blockedCounter.Location = new Point(
-            _blockedIcon.Right,
-            (ToolbarHeight - _blockedCounter.Height) / 2);
+        var left = x + 6;
+        _address.Location = new Point(left, (ToolbarHeight - _address.Height) / 2);
+        _address.Width = Math.Max(140, _libraryButton.Left - 6 - left);
     }
 
     private void OnAddressKeyDown(object? sender, KeyEventArgs e)
@@ -661,7 +593,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         e.Handled = true;
         e.SuppressKeyPress = true;
 
-        ActiveView?.Navigate(UrlResolver.Resolve(_address.Text, _searchEngine));
+        ActiveView?.Navigate(UrlResolver.Resolve(_address.Address, _searchEngine));
         ActiveView?.View.Focus();
     }
 
@@ -674,35 +606,34 @@ internal sealed class MainForm : Form, IAutomationTarget
 
         var view = ActiveView;
 
-        _back.Enabled = view?.CanGoBack ?? false;
-        _forward.Enabled = view?.CanGoForward ?? false;
-        _back.ForeColor = _back.Enabled ? Theme.Foreground : Theme.ForegroundDim;
-        _forward.ForeColor = _forward.Enabled ? Theme.Foreground : Theme.ForegroundDim;
-        _reload.Text = view?.IsLoading == true ? "×" : "↻";
+        // Botao desabilitado fica apagado, nao some: sumir moveria os vizinhos
+        // de lugar a cada navegacao.
+        _back.Muted = view?.CanGoBack != true;
+        _forward.Muted = view?.CanGoForward != true;
+        _back.Invalidate();
+        _forward.Invalidate();
 
-        // Contador de bloqueios da aba ativa: a prova visivel de que a lista age.
-        var blocked = view?.BlockedRequests ?? 0;
-        _blockedIcon.Text = blocked > 0 ? "" : string.Empty;
-        _blockedCounter.Text = blocked > 0
-            ? blocked.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : string.Empty;
+        _reload.Glyph = view?.IsLoading == true ? Glyphs.Stop : Glyphs.Reload;
+        _reload.Invalidate();
 
         var container = _session.Active?.Container;
         Text = _session.Active?.Title is { Length: > 0 } title
-            ? $"{title} — {container?.Name} — {AppPaths.ProductName}"
+            ? $"{title} \u2014 {container?.Name} \u2014 {AppPaths.ProductName}"
             : AppPaths.ProductName;
 
-        // Só não sobrescreve se o usuario estiver de fato digitando. Checar apenas
-        // o foco deixava a barra em branco na abertura, porque ela nasce focada.
-        if (_suppressAddressSync || (_address.Focused && _address.Modified))
+        _address.BlockedRequests = view?.BlockedRequests ?? 0;
+        _address.IsBookmarked = view is not null && _library.IsBookmarked(view.Url);
+
+        // So nao sobrescreve se o usuario estiver de fato digitando.
+        if (_suppressAddressSync || _address.UserIsTyping)
         {
             return;
         }
 
         _suppressAddressSync = true;
         var url = view?.Url ?? HomeUrl;
-        _address.Text = url is HomeUrl ? string.Empty : url;
-        _address.Modified = false;
+        _address.Address = url is HomeUrl ? string.Empty : url;
+        _address.ClearModified();
         _suppressAddressSync = false;
     }
 
@@ -946,7 +877,7 @@ internal sealed class MainForm : Form, IAutomationTarget
     {
         Tabs = [.. _session.Tabs.Select(ToAutomationTab)],
         ActiveTabIndex = _session.ActiveIndex,
-        AddressBarText = _address.Text,
+        AddressBarText = _address.Address,
         BlocklistSize = _blocklist.Count,
         KeysFromPage = _keysFromPage,
         LastKeyFromPage = _lastKeyFromPage,

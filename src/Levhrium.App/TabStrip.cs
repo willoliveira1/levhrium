@@ -10,9 +10,10 @@ namespace Levhrium.App;
 /// </summary>
 internal sealed class TabStrip : Panel
 {
-    internal const int StripHeight = 36;
+    internal const int StripHeight = 40;
 
-    private const int BadgeWidth = 3;
+    private const int BadgeHeight = 3;
+    private const int TabRadius = 9;
     private const int DragThreshold = 6;
 
     private readonly List<TabBounds> _layout = [];
@@ -82,8 +83,8 @@ internal sealed class TabStrip : Panel
             DrawTab(g, _session, bounds);
         }
 
-        DrawStripButton(g, NewTabBounds, "+", _hoverNew);
-        DrawStripButton(g, ContainerMenuBounds, "▾", _hoverContainers);
+        DrawStripButton(g, NewTabBounds, Glyphs.Add, _hoverNew);
+        DrawStripButton(g, ContainerMenuBounds, Glyphs.ChevronDown, _hoverContainers);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -188,15 +189,15 @@ internal sealed class TabStrip : Panel
 
     private Rectangle NewTabBounds => new(
         TabStripLayout.NewTabLeft(_slots),
-        (Height - 24) / 2,
+        Height - 33,
         TabStripLayout.NewTabWidth,
-        24);
+        29);
 
     private Rectangle ContainerMenuBounds => new(
         NewTabBounds.Right + 1,
         NewTabBounds.Top,
         TabStripLayout.ContainerMenuWidth,
-        24);
+        29);
 
     /// <summary>
     /// Posicoes vem de <see cref="TabStripLayout"/>, no nucleo: a conta e a
@@ -226,37 +227,59 @@ internal sealed class TabStrip : Panel
 
         var isActive = session.ActiveIndex == item.Index;
         var isHover = _hoverTabId == item.TabId;
-        var bounds = item.Bounds;
 
-        // Ativa com a cor da toolbar: as duas se fundem e a aba parece erguida.
+        // A ativa e mais alta e usa a cor da toolbar: as duas se fundem e a aba
+        // parece continuar na barra de baixo.
+        var bounds = isActive
+            ? item.Bounds
+            : new Rectangle(item.Bounds.Left, item.Bounds.Top + 4, item.Bounds.Width, item.Bounds.Height - 4);
+
         var background = isActive
             ? Theme.ToolbarBackground
             : isHover
                 ? Theme.TabHover
                 : Theme.TabInactive;
 
-        using (var path = RoundedTop(bounds, 6))
+        using (var path = Theme.RoundedTop(bounds, TabRadius))
         using (var brush = new SolidBrush(background))
         {
             g.FillPath(brush, path);
         }
 
-        // Selo do container: barra vertical na borda esquerda da aba.
-        var badge = new Rectangle(bounds.Left, bounds.Top + 6, BadgeWidth, bounds.Height - 10);
+        // Selo do container: barra no topo, atravessando a largura. Com duas
+        // contas do mesmo site os titulos sao iguais e o selo e a unica pista,
+        // entao vale a maior area colorida possivel.
+        using (var badgePath = Theme.RoundedTop(
+            new Rectangle(bounds.Left, bounds.Top, bounds.Width, TabRadius * 2), TabRadius))
         using (var badgeBrush = new SolidBrush(Color.FromArgb(tab.Container.Color)))
         {
-            g.FillRectangle(badgeBrush, badge);
+            var clip = g.Clip;
+            g.SetClip(new Rectangle(bounds.Left, bounds.Top, bounds.Width, BadgeHeight));
+            g.FillPath(badgeBrush, badgePath);
+            g.Clip = clip;
         }
 
         var showClose = isActive || isHover;
-        var textLeft = bounds.Left + BadgeWidth + 8;
+        var textLeft = bounds.Left + 12;
         var textRight = bounds.Right - 8 - (showClose ? TabStripLayout.CloseSize : 0);
         var textBounds = Rectangle.FromLTRB(textLeft, bounds.Top, Math.Max(textLeft, textRight), bounds.Bottom);
 
         var label = tab.Title is { Length: > 0 } title ? title : ShortenUrl(tab.Url);
         if (tab.Pinned)
         {
-            label = "• " + label;
+            // Alfinete em vez de um ponto: o ponto nao dizia o que significava.
+            using var pinFont = new Font(Theme.IconFontName, 7.5f);
+
+            TextRenderer.DrawText(
+                g,
+                Glyphs.Pin,
+                pinFont,
+                new Rectangle(textBounds.Left, textBounds.Top, 14, textBounds.Height),
+                Theme.ForegroundDim,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix);
+
+            textBounds = Rectangle.FromLTRB(
+                textBounds.Left + 16, textBounds.Top, textBounds.Right, textBounds.Bottom);
         }
 
         TextRenderer.DrawText(
@@ -274,32 +297,42 @@ internal sealed class TabStrip : Panel
         }
 
         var close = CloseBounds(bounds);
-        if (_hoverTabId == item.TabId && _hoverClose)
+        var closeHovered = _hoverTabId == item.TabId && _hoverClose;
+
+        using (var closeBrush = new SolidBrush(closeHovered ? Theme.CloseHover : Theme.CloseBackground))
         {
-            using var hoverBrush = new SolidBrush(Theme.CloseHover);
-            g.FillEllipse(hoverBrush, close);
+            g.FillEllipse(closeBrush, close);
         }
 
-        using var pen = new Pen(isActive ? Theme.Foreground : Theme.ForegroundDim, 1.4f);
-        var pad = 5;
-        g.DrawLine(pen, close.Left + pad, close.Top + pad, close.Right - pad, close.Bottom - pad);
-        g.DrawLine(pen, close.Right - pad, close.Top + pad, close.Left + pad, close.Bottom - pad);
+        using var closeFont = new Font(Theme.IconFontName, 6.5f);
+
+        TextRenderer.DrawText(
+            g,
+            Glyphs.Close,
+            closeFont,
+            close,
+            closeHovered ? Theme.Foreground : Theme.ForegroundDim,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
     }
 
-    private void DrawStripButton(Graphics g, Rectangle bounds, string glyph, bool hover)
+    private static void DrawStripButton(Graphics g, Rectangle bounds, string glyph, bool hover)
     {
+        var side = Math.Min(bounds.Width, bounds.Height);
+        var circle = new Rectangle(bounds.Left, bounds.Top, side, side);
+
         if (hover)
         {
-            using var brush = new SolidBrush(Theme.TabHover);
-            using var path = RoundedTop(bounds, 4);
-            g.FillPath(brush, path);
+            using var brush = new SolidBrush(Theme.ButtonHover);
+            g.FillEllipse(brush, circle);
         }
+
+        using var iconFont = new Font(Theme.IconFontName, 8.5f);
 
         TextRenderer.DrawText(
             g,
             glyph,
-            Font,
-            bounds,
+            iconFont,
+            circle,
             hover ? Theme.Foreground : Theme.ForegroundDim,
             TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPrefix);
     }
@@ -357,20 +390,6 @@ internal sealed class TabStrip : Panel
         }
 
         return new TabHit(_layout[hit.TabIndex].TabId, hit.OnClose, false, false);
-    }
-
-    /// <summary>Retangulo com os dois cantos de cima arredondados.</summary>
-    private static GraphicsPath RoundedTop(Rectangle bounds, int radius)
-    {
-        var path = new GraphicsPath();
-        var diameter = radius * 2;
-
-        path.AddArc(bounds.Left, bounds.Top, diameter, diameter, 180, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Top, diameter, diameter, 270, 90);
-        path.AddLine(bounds.Right, bounds.Bottom, bounds.Left, bounds.Bottom);
-        path.CloseFigure();
-
-        return path;
     }
 
     /// <summary>Rotulo de aba que ainda nao tem titulo: host sem esquema.</summary>

@@ -29,7 +29,7 @@ public sealed class VisualBaselineTests
     /// de endereco, porque mostra a porta sorteada do servidor de fixture. As
     /// duas fariam a referencia mudar sozinha.
     /// </summary>
-    private static readonly Rectangle Strip = new(0, 0, 1180, 36);
+    private static readonly Rectangle Strip = new(0, 0, 1180, 40);
 
     [Fact]
     public async Task FaixaDeAbasComTresContainers()

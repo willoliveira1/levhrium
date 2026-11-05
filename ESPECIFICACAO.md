@@ -23,7 +23,16 @@ envelhece, não pesa no instalador e não há republicação por CVE do Chromium
 ## Stack
 
 **C# / .NET 10 + WinForms**, pacote `Microsoft.Web.WebView2`. Barra de título nativa;
-faixa de abas e toolbar desenhadas à mão (GDI+, double-buffered, tema escuro).
+faixa de abas, botões e barra de endereço desenhados à mão (GDI+, double-buffered).
+
+**Visual:** meio-termo entre "compacto" e "elevado" — abas presas à faixa, com a ativa
+usando a cor da toolbar para as duas se fundirem, mas com cantos de 9px e botões de
+ícone circulares. O selo do container é uma **barra no topo da aba, atravessando a
+largura**: com duas contas do mesmo site os títulos são idênticos e o selo é a única
+pista, então vale a maior área colorida possível. Ícones vêm do **Segoe MDL2 Assets**,
+a fonte de ícones do Windows — mesmo peso, mesmo alinhamento, nada para baixar.
+A barra de endereço mostra o **domínio em negrito e o caminho apagado**, com cadeado,
+contador de bloqueios e estrela dentro da mesma pílula.
 
 Enxugamento em `Directory.Build.props`: GC workstation não-concorrente,
 `TieredPGO`, satélites de idioma só em pt-BR e en.

@@ -18,13 +18,17 @@ internal sealed class BrowserTab : IDisposable
 
     private readonly DomainBlocklist _blocklist;
 
+    private readonly string? _downloadFolder;
+
     internal BrowserTab(
         TabModel model,
         CoreWebView2CreationProperties creationProperties,
-        DomainBlocklist blocklist)
+        DomainBlocklist blocklist,
+        string? downloadFolder = null)
     {
         Model = model;
         _blocklist = blocklist;
+        _downloadFolder = downloadFolder;
 
         View = new WebView2
         {
@@ -131,6 +135,12 @@ internal sealed class BrowserTab : IDisposable
     internal void Reload() => View.CoreWebView2?.Reload();
 
     /// <summary>
+    /// Abre o DevTools. Precisa ser chamado por nos: desligamos os aceleradores
+    /// do Edge para ficar com Ctrl+T e Ctrl+W, e isso leva junto o F12 nativo.
+    /// </summary>
+    internal void OpenDevTools() => View.CoreWebView2?.OpenDevToolsWindow();
+
+    /// <summary>
     /// Congela o renderer. Nao descarta: o DOM continua vivo e retomar e
     /// instantaneo -- perder estado numa aba de jogo idle seria pior que a RAM.
     /// </summary>
@@ -196,6 +206,15 @@ internal sealed class BrowserTab : IDisposable
         core.HistoryChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
 
         core.DownloadStarting += OnDownloadStarting;
+
+        // Em uso normal os downloads vao para a pasta Downloads do usuario; so o
+        // modo de teste redireciona, para o teste achar o arquivo e nao sujar a
+        // pasta de verdade.
+        if (_downloadFolder is { Length: > 0 } folder)
+        {
+            Directory.CreateDirectory(folder);
+            core.Profile.DefaultDownloadFolderPath = folder;
+        }
 
         // Bloqueio por dominio direto no nativo: sem extensao e sem renderer extra.
         if (_blocklist.Count > 0)

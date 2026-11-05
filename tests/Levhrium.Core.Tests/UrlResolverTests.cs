@@ -23,11 +23,32 @@ public sealed class UrlResolverTests
     [Theory]
     [InlineData("poke.sigmaproject.online", "https://poke.sigmaproject.online/")]
     [InlineData("exemplo.com/caminho?a=1", "https://exemplo.com/caminho?a=1")]
-    [InlineData("localhost", "https://localhost/")]
-    [InlineData("localhost:5000", "https://localhost:5000/")]
-    [InlineData("127.0.0.1:8080", "https://127.0.0.1:8080/")]
-    public void CompletaEsquemaQuandoParecerHost(string input, string expected)
+    [InlineData("8.8.8.8", "https://8.8.8.8/")]
+    public void CompletaComHttpsQuandoParecerHostPublico(string input, string expected)
     {
+        Assert.Equal(expected, UrlResolver.Resolve(input, Engine).ToString());
+    }
+
+    [Theory]
+    [InlineData("localhost", "http://localhost/")]
+    [InlineData("localhost:5000", "http://localhost:5000/")]
+    [InlineData("127.0.0.1:8080", "http://127.0.0.1:8080/")]
+    [InlineData("192.168.0.10", "http://192.168.0.10/")]
+    [InlineData("10.0.0.5:3000", "http://10.0.0.5:3000/")]
+    [InlineData("172.16.0.1", "http://172.16.0.1/")]
+    public void EnderecoLocalUsaHttp(string input, string expected)
+    {
+        // Servidor de desenvolvimento quase nunca tem TLS; insistir em https
+        // devolveria so erro de conexao.
+        Assert.Equal(expected, UrlResolver.Resolve(input, Engine).ToString());
+    }
+
+    [Theory]
+    [InlineData("172.32.0.1", "https://172.32.0.1/")]
+    [InlineData("11.0.0.1", "https://11.0.0.1/")]
+    public void IpForaDasFaixasPrivadasUsaHttps(string input, string expected)
+    {
+        // 172.32 esta fora da faixa 172.16-31 do RFC 1918.
         Assert.Equal(expected, UrlResolver.Resolve(input, Engine).ToString());
     }
 

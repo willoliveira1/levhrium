@@ -31,7 +31,7 @@ public static class UrlResolver
 
         if (LooksLikeHost(text))
         {
-            return new Uri("https://" + text);
+            return new Uri(DefaultSchemeFor(text) + text);
         }
 
         return searchEngine.BuildQueryUrl(text);
@@ -90,6 +90,41 @@ public static class UrlResolver
         }
 
         return hostPart.All(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_');
+    }
+
+    /// <summary>
+    /// https por padrao, mas http para endereco local: servidor de
+    /// desenvolvimento em localhost ou rede interna quase nunca tem TLS, e
+    /// insistir em https so devolveria erro de conexao.
+    /// </summary>
+    private static string DefaultSchemeFor(string text)
+    {
+        var host = StripPort(text.Split('/', 2)[0]);
+
+        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            return "http://";
+        }
+
+        if (!System.Net.IPAddress.TryParse(host, out var address))
+        {
+            return "https://";
+        }
+
+        if (System.Net.IPAddress.IsLoopback(address))
+        {
+            return "http://";
+        }
+
+        var bytes = address.GetAddressBytes();
+
+        // Faixas privadas do RFC 1918.
+        var isPrivate = bytes.Length == 4 && (
+            bytes[0] == 10 ||
+            (bytes[0] == 192 && bytes[1] == 168) ||
+            (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31));
+
+        return isPrivate ? "http://" : "https://";
     }
 
     /// <summary>Remove ":porta" do fim, preservando IPv6 entre colchetes.</summary>

@@ -26,12 +26,18 @@ internal sealed class MainForm : Form, IAutomationTarget
     private readonly BrowserState _restoredState;
     private readonly AppPaths _paths;
 
+    /// <summary>Pasta de download forcada; nula em uso normal.</summary>
+    private readonly string? _downloadFolder;
+
     /// <summary>Limiar de hibernacao em minutos, ajustavel nas configuracoes.</summary>
     private int _hibernateMinutes;
 
     /// <summary>Diagnostico de teclado: toda tecla vinda da pagina conta aqui.</summary>
     private int _keysFromPage;
     private string _lastKeyFromPage = string.Empty;
+
+    /// <summary>Diagnostico do menu de link; ver AutomationState.</summary>
+    private int _linkMenusCustomized;
     private readonly Dictionary<Guid, BrowserTab> _views = [];
 
     private readonly TabStrip _tabStrip;
@@ -61,6 +67,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         _restoredState = _stateStore.Load();
         _library = new Library(_restoredState);
         _paths = paths;
+        _downloadFolder = options.TestMode ? Path.Combine(paths.RootFolder, "Downloads") : null;
 
         // A linha de comando vence a configuracao gravada: e assim que os testes
         // conseguem fixar um limiar de poucos segundos.
@@ -260,6 +267,10 @@ internal sealed class MainForm : Form, IAutomationTarget
                 ActiveView?.Reload();
                 return true;
 
+            case Keys.F12:
+                ActiveView?.OpenDevTools();
+                return true;
+
             case Keys.Alt | Keys.Left:
                 ActiveView?.GoBack();
                 return true;
@@ -369,7 +380,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         // progredir, e a fixacao deixa a protecao visivel na faixa de abas.
         model.Pinned = _hibernationPolicy.ShouldPinOnOpen(url);
 
-        var view = new BrowserTab(model, _webViewSettings.For(model.Container), _blocklist);
+        var view = new BrowserTab(model, _webViewSettings.For(model.Container), _blocklist, _downloadFolder);
         view.Changed += (_, _) => OnTabContentChanged(model.Id);
         view.HotkeyPressed += OnHotkeyFromPage;
         WireLibraryEvents(view, model.Id);
@@ -443,7 +454,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         }
 
         // O modelo ja voltou para a sessao; falta criar a view no mesmo container.
-        var view = new BrowserTab(restored, _webViewSettings.For(restored.Container), _blocklist);
+        var view = new BrowserTab(restored, _webViewSettings.For(restored.Container), _blocklist, _downloadFolder);
         view.Changed += (_, _) => OnTabContentChanged(restored.Id);
         view.HotkeyPressed += OnHotkeyFromPage;
         WireLibraryEvents(view, restored.Id);
@@ -491,6 +502,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         Keys.Control | Keys.Shift | Keys.T => true,
         Keys.Control | Keys.L => true,
         Keys.F5 => true,
+        Keys.F12 => true,
         Keys.Control | Keys.R => true,
         Keys.Alt | Keys.Left => true,
         Keys.Alt | Keys.Right => true,
@@ -600,6 +612,8 @@ internal sealed class MainForm : Form, IAutomationTarget
         {
             return;
         }
+
+        _linkMenusCustomized++;
 
         var submenu = core.Environment.CreateContextMenuItem(
             "Abrir link em container",
@@ -979,6 +993,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         BlocklistSize = _blocklist.Count,
         KeysFromPage = _keysFromPage,
         LastKeyFromPage = _lastKeyFromPage,
+        LinkMenusCustomized = _linkMenusCustomized,
         Library = new AutomationLibrary
         {
             BookmarkCount = _library.Bookmarks.Count,
@@ -1095,6 +1110,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         "ctrl+minus" => Keys.Control | Keys.OemMinus,
         "ctrl+0" => Keys.Control | Keys.D0,
         "f5" => Keys.F5,
+        "f12" => Keys.F12,
         "alt+left" => Keys.Alt | Keys.Left,
         "alt+right" => Keys.Alt | Keys.Right,
         _ => throw new ArgumentException("Atalho desconhecido: " + name, nameof(name)),

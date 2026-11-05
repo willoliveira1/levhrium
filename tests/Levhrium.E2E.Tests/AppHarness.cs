@@ -35,6 +35,9 @@ public sealed class AppHarness : IAsyncDisposable
 
     public TestHandshake Handshake { get; }
 
+    /// <summary>Processo do navegador, para captura de janela.</summary>
+    public Process Process => _process;
+
     /// <summary>Endpoint CDP para <c>ConnectOverCDPAsync</c>.</summary>
     public string CdpEndpoint => $"http://127.0.0.1:{Handshake.CdpPort}";
 

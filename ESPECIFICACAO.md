@@ -163,9 +163,21 @@ Todo critério de "pronto" dos marcos vira teste, nunca verificação manual.
 
 | Camada | Ferramenta | Cobre |
 |---|---|---|
-| Unitário | xUnit sobre `Levhrium.Core` | hibernação, pilha de fechadas, containers, blocklist, sessão |
-| Integração | **Playwright/C# via CDP** | isolamento entre containers, bloqueio, suspensão/retomada |
-| UI/E2E | **named pipe de automação** + baseline de screenshot | abas, hotkeys, selo, barra de endereço |
+| Unitário | xUnit sobre `Levhrium.Core` | hibernação, pilha de fechadas, containers, blocklist, sessão, **geometria da faixa de abas** |
+| Integração | **Playwright/C# via CDP** | isolamento entre containers, bloqueio, suspensão/retomada, menu de contexto, download |
+| UI/E2E | **named pipe de automação** | abas, hotkeys, selo, barra de endereço |
+| Visual | **baseline de screenshot** | faixa de abas com três containers; aba fixada |
+
+A geometria da faixa de abas (`TabStripLayout`) ficou no núcleo de propósito: é
+onde moram os defeitos de clicar no "x" errado e de arrastar para a posição
+errada, e lá dá para testar sem abrir janela. O controle desenha a partir dela —
+não há uma segunda conta paralela.
+
+O baseline visual é deliberadamente pequeno: comparação de pixel é frágil a DPI,
+fonte e tema. Recorta só a barra de título e a faixa de abas — a barra de endereço
+fica de fora porque mostra a porta sorteada do servidor de fixture. Tolerância de
+2% dos pixels. Referência ausente é gerada e o teste falha pedindo conferência a
+olho antes de versionar.
 
 O Playwright dirige o DOM dentro das abas, mas **não alcança a casca** (GDI+ não é DOM,
 e faixa de abas custom-desenhada não existe na árvore de UI Automation). Daí o pipe.

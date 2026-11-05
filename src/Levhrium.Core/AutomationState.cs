@@ -31,6 +31,12 @@ public sealed record AutomationState
     public required int KeysFromPage { get; init; }
 
     public required string LastKeyFromPage { get; init; }
+
+    /// <summary>
+    /// Quantas vezes o menu de contexto de um link recebeu o submenu "Abrir em
+    /// container". Existe porque um menu nativo nao da para inspecionar de fora.
+    /// </summary>
+    public required int LinkMenusCustomized { get; init; }
 }
 
 /// <summary>Resumo da biblioteca para os testes.</summary>

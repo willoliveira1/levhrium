@@ -122,6 +122,26 @@ public sealed class FixtureServer : IAsyncDisposable
             <input id="campo" type="text" autofocus>
             """));
 
+        // Fixture de download: Content-Disposition attachment faz o navegador
+        // baixar em vez de exibir.
+        app.MapGet("/baixar.txt", (HttpContext context) =>
+        {
+            context.Response.Headers.ContentDisposition = "attachment; filename=\"levhrium-teste.txt\"";
+            return Results.Text("arquivo de teste do Levhrium", "text/plain");
+        });
+
+        // Fixture do menu de contexto: um link grande, facil de acertar com o
+        // clique direito.
+        app.MapGet("/com-link", () => Page(
+            "Com Link",
+            """
+            <h1 id="titulo">Com Link</h1>
+            <a id="link" href="/dois"
+               style="display:block;width:400px;height:200px;background:#eef;font-size:40px">
+              abrir em outro container
+            </a>
+            """));
+
         app.MapGet("/recurso-permitido.png", () => Results.Bytes(TransparentPixel, "image/png"));
         app.MapGet("/recurso-anuncio.png", () => Results.Bytes(TransparentPixel, "image/png"));
 

@@ -12,15 +12,12 @@ internal sealed class TabStrip : Panel
 {
     internal const int StripHeight = 36;
 
-    private const int TabMaxWidth = 220;
-    private const int TabMinWidth = 64;
-    private const int TabGap = 2;
     private const int BadgeWidth = 3;
-    private const int CloseSize = 16;
-    private const int ButtonWidth = 30;
     private const int DragThreshold = 6;
 
     private readonly List<TabBounds> _layout = [];
+
+    private IReadOnlyList<TabSlot> _slots = [];
 
     private TabSession? _session;
     private Guid? _hoverTabId;
@@ -190,41 +187,32 @@ internal sealed class TabStrip : Panel
     }
 
     private Rectangle NewTabBounds => new(
-        _layout.Count == 0 ? 4 : _layout[^1].Bounds.Right + TabGap,
+        TabStripLayout.NewTabLeft(_slots),
         (Height - 24) / 2,
-        ButtonWidth,
+        TabStripLayout.NewTabWidth,
         24);
 
     private Rectangle ContainerMenuBounds => new(
         NewTabBounds.Right + 1,
         NewTabBounds.Top,
-        22,
+        TabStripLayout.ContainerMenuWidth,
         24);
 
-    /// <summary>Recalcula larguras: as abas dividem o espaco disponivel igualmente.</summary>
+    /// <summary>
+    /// Posicoes vem de <see cref="TabStripLayout"/>, no nucleo: a conta e a
+    /// mesma que os testes exercitam, nao uma copia paralela.
+    /// </summary>
     private void RebuildLayout()
     {
         _layout.Clear();
+        _slots = _session is null ? [] : TabStripLayout.Compute(Width, _session.Tabs.Count);
 
-        if (_session is null || _session.Tabs.Count == 0)
+        for (var i = 0; i < _slots.Count; i++)
         {
-            return;
-        }
-
-        var count = _session.Tabs.Count;
-        var available = Width - 4 - ButtonWidth - 24 - TabGap;
-        var width = Math.Clamp((available / count) - TabGap, TabMinWidth, TabMaxWidth);
-
-        var x = 4;
-        for (var i = 0; i < count; i++)
-        {
-            var tab = _session.Tabs[i];
             _layout.Add(new TabBounds(
-                tab.Id,
+                _session!.Tabs[i].Id,
                 i,
-                new Rectangle(x, 4, width, Height - 4)));
-
-            x += width + TabGap;
+                new Rectangle(_slots[i].Left, 4, _slots[i].Width, Height - 4)));
         }
     }
 
@@ -262,7 +250,7 @@ internal sealed class TabStrip : Panel
 
         var showClose = isActive || isHover;
         var textLeft = bounds.Left + BadgeWidth + 8;
-        var textRight = bounds.Right - 8 - (showClose ? CloseSize : 0);
+        var textRight = bounds.Right - 8 - (showClose ? TabStripLayout.CloseSize : 0);
         var textBounds = Rectangle.FromLTRB(textLeft, bounds.Top, Math.Max(textLeft, textRight), bounds.Bottom);
 
         var label = tab.Title is { Length: > 0 } title ? title : ShortenUrl(tab.Url);
@@ -324,44 +312,51 @@ internal sealed class TabStrip : Panel
         }
 
         var from = _layout.FindIndex(item => item.TabId == id);
-        var target = _layout.FindIndex(item => location.X >= item.Bounds.Left && location.X <= item.Bounds.Right);
+        var target = TabStripLayout.DropIndex(_slots, location.X);
 
-        if (from >= 0 && target >= 0 && from != target)
+        if (from >= 0 && from != target)
         {
             TabMoved?.Invoke(this, (from, target));
             Invalidate();
         }
     }
 
-    private static Rectangle CloseBounds(Rectangle tab) => new(
-        tab.Right - CloseSize - 6,
-        tab.Top + ((tab.Height - CloseSize) / 2),
-        CloseSize,
-        CloseSize);
+    private static Rectangle CloseBounds(Rectangle tab)
+    {
+        var slot = new TabSlot(0, tab.Left, tab.Width);
+        var (left, size) = TabStripLayout.CloseBounds(slot);
+
+        return new Rectangle(left, tab.Top + ((tab.Height - size) / 2), size, size);
+    }
 
     private TabHit HitTest(Point location)
     {
-        if (NewTabBounds.Contains(location))
+        var hoverIndex = _hoverTabId is { } id
+            ? _layout.FindIndex(item => item.TabId == id)
+            : -1;
+
+        var hit = TabStripLayout.HitTest(
+            _slots,
+            location.X,
+            _session?.ActiveIndex ?? -1,
+            hoverIndex);
+
+        if (hit.OnNewTab)
         {
             return new TabHit(null, false, true, false);
         }
 
-        if (ContainerMenuBounds.Contains(location))
+        if (hit.OnContainerMenu)
         {
             return new TabHit(null, false, false, true);
         }
 
-        foreach (var item in _layout)
+        if (hit.TabIndex < 0 || hit.TabIndex >= _layout.Count)
         {
-            if (!item.Bounds.Contains(location))
-            {
-                continue;
-            }
-
-            return new TabHit(item.TabId, CloseBounds(item.Bounds).Contains(location), false, false);
+            return new TabHit(null, false, false, false);
         }
 
-        return new TabHit(null, false, false, false);
+        return new TabHit(_layout[hit.TabIndex].TabId, hit.OnClose, false, false);
     }
 
     /// <summary>Retangulo com os dois cantos de cima arredondados.</summary>

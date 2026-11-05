@@ -113,6 +113,15 @@ public sealed class FixtureServer : IAsyncDisposable
                 """);
         });
 
+        // Fixture de teclado: um campo de texto, para provar que interceptar os
+        // atalhos nao impede de digitar normalmente num site.
+        app.MapGet("/digitar", () => Page(
+            "Digitar",
+            """
+            <h1 id="titulo">Digitar</h1>
+            <input id="campo" type="text" autofocus>
+            """));
+
         app.MapGet("/recurso-permitido.png", () => Results.Bytes(TransparentPixel, "image/png"));
         app.MapGet("/recurso-anuncio.png", () => Results.Bytes(TransparentPixel, "image/png"));
 

@@ -28,6 +28,10 @@ internal sealed class MainForm : Form, IAutomationTarget
 
     /// <summary>Limiar de hibernacao em minutos, ajustavel nas configuracoes.</summary>
     private int _hibernateMinutes;
+
+    /// <summary>Diagnostico de teclado: toda tecla vinda da pagina conta aqui.</summary>
+    private int _keysFromPage;
+    private string _lastKeyFromPage = string.Empty;
     private readonly Dictionary<Guid, BrowserTab> _views = [];
 
     private readonly TabStrip _tabStrip;
@@ -210,7 +214,19 @@ internal sealed class MainForm : Form, IAutomationTarget
         _ = InitializeAsync();
     }
 
-    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    /// <summary>
+    /// Caminho de teclado quando o foco esta na casca (barra de endereco, abas).
+    /// Com o foco dentro da pagina as teclas chegam por
+    /// <see cref="BrowserTab.HotkeyPressed"/>, nao por aqui.
+    /// </summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData) =>
+        TryHandleHotkey(keyData) || base.ProcessCmdKey(ref msg, keyData);
+
+    /// <summary>
+    /// Tabela unica de atalhos, usada pelos dois caminhos de teclado. Devolve
+    /// true quando a tecla e nossa e nao deve seguir para a pagina.
+    /// </summary>
+    internal bool TryHandleHotkey(Keys keyData)
     {
         switch (keyData)
         {
@@ -280,7 +296,7 @@ internal sealed class MainForm : Form, IAutomationTarget
                 return true;
 
             default:
-                return base.ProcessCmdKey(ref msg, keyData);
+                return false;
         }
     }
 
@@ -355,6 +371,7 @@ internal sealed class MainForm : Form, IAutomationTarget
 
         var view = new BrowserTab(model, _webViewSettings.For(model.Container), _blocklist);
         view.Changed += (_, _) => OnTabContentChanged(model.Id);
+        view.HotkeyPressed += OnHotkeyFromPage;
         WireLibraryEvents(view, model.Id);
 
         _views[model.Id] = view;
@@ -428,6 +445,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         // O modelo ja voltou para a sessao; falta criar a view no mesmo container.
         var view = new BrowserTab(restored, _webViewSettings.For(restored.Container), _blocklist);
         view.Changed += (_, _) => OnTabContentChanged(restored.Id);
+        view.HotkeyPressed += OnHotkeyFromPage;
         WireLibraryEvents(view, restored.Id);
 
         _views[restored.Id] = view;
@@ -440,6 +458,53 @@ internal sealed class MainForm : Form, IAutomationTarget
 
         OnActiveTabChanged();
     }
+
+    /// <summary>
+    /// Atalho vindo de dentro da pagina. O evento do WebView2 bloqueia o
+    /// processo do browser enquanto roda, entao aqui so reconhecemos a tecla e
+    /// mandamos a acao para a fila da UI.
+    /// </summary>
+    private bool OnHotkeyFromPage(Keys keyData)
+    {
+        _keysFromPage++;
+        _lastKeyFromPage = keyData.ToString();
+
+        if (!IsOurHotkey(keyData))
+        {
+            return false;
+        }
+
+        BeginInvoke(() => TryHandleHotkey(keyData));
+        return true;
+    }
+
+    /// <summary>
+    /// Reconhece a tecla sem executar nada. Existe separado porque o
+    /// reconhecimento precisa ser imediato e a acao, adiada.
+    /// </summary>
+    private static bool IsOurHotkey(Keys keyData) => keyData switch
+    {
+        Keys.Control | Keys.T => true,
+        Keys.Control | Keys.W => true,
+        Keys.Control | Keys.Tab => true,
+        Keys.Control | Keys.Shift | Keys.Tab => true,
+        Keys.Control | Keys.Shift | Keys.T => true,
+        Keys.Control | Keys.L => true,
+        Keys.F5 => true,
+        Keys.Control | Keys.R => true,
+        Keys.Alt | Keys.Left => true,
+        Keys.Alt | Keys.Right => true,
+        Keys.Control | Keys.D => true,
+        Keys.Control | Keys.H => true,
+        Keys.Control | Keys.J => true,
+        Keys.Control | Keys.Oemplus => true,
+        Keys.Control | Keys.Add => true,
+        Keys.Control | Keys.OemMinus => true,
+        Keys.Control | Keys.Subtract => true,
+        Keys.Control | Keys.D0 => true,
+        Keys.Control | Keys.NumPad0 => true,
+        _ => false,
+    };
 
     private void OnActiveTabChanged()
     {
@@ -912,6 +977,8 @@ internal sealed class MainForm : Form, IAutomationTarget
         ActiveTabIndex = _session.ActiveIndex,
         AddressBarText = _address.Text,
         BlocklistSize = _blocklist.Count,
+        KeysFromPage = _keysFromPage,
+        LastKeyFromPage = _lastKeyFromPage,
         Library = new AutomationLibrary
         {
             BookmarkCount = _library.Bookmarks.Count,

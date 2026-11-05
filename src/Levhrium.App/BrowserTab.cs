@@ -46,6 +46,7 @@ internal sealed class BrowserTab : IDisposable
             }
         };
         View.SourceChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
+        View.KeyDown += OnViewKeyDown;
     }
 
     /// <summary>Disparado quando algo exibido na aba ou na toolbar muda.</summary>
@@ -59,6 +60,15 @@ internal sealed class BrowserTab : IDisposable
 
     /// <summary>Disparado quando um download termina, com o destino.</summary>
     internal event EventHandler<string>? DownloadCompleted;
+
+    /// <summary>
+    /// Atalho pressionado com o foco dentro da pagina. Precisa existir porque o
+    /// WebView2 roda em outro processo: o WM_KEYDOWN vai para a janela do
+    /// Chromium e nunca aparece na fila de mensagens do WinForms, entao
+    /// ProcessCmdKey do formulario nao e chamado. Quem trata deve devolver true
+    /// para a tecla nao seguir para a pagina.
+    /// </summary>
+    internal event Func<Keys, bool>? HotkeyPressed;
 
     internal TabModel Model { get; }
 
@@ -196,6 +206,23 @@ internal sealed class BrowserTab : IDisposable
 
         _ready.TrySetResult();
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Unico caminho pelo qual um atalho chega ao navegador com o foco na
+    /// pagina. O evento e sincrono e bloqueia o processo do browser enquanto
+    /// roda, entao aqui so decidimos e marcamos Handled: a acao em si vai para a
+    /// fila da UI.
+    /// </summary>
+    private void OnViewKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (HotkeyPressed is { } handler && handler(e.KeyData))
+        {
+            // Handled impede que a tecla siga para a pagina -- sem isso, um
+            // Ctrl+W tambem chegaria ao site por baixo.
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
     }
 
     private void OnDownloadStarting(object? sender, CoreWebView2DownloadStartingEventArgs e)

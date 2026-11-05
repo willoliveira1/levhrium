@@ -22,6 +22,15 @@ public sealed record AutomationState
 
     /// <summary>Favoritos, historico e downloads, como a biblioteca os ve.</summary>
     public required AutomationLibrary Library { get; init; }
+
+    /// <summary>
+    /// Quantas teclas chegaram vindas de dentro da pagina, e qual foi a ultima.
+    /// Existe para diagnosticar atalhos: zero aqui depois de apertar uma tecla
+    /// significa que ela nem chega ao host.
+    /// </summary>
+    public required int KeysFromPage { get; init; }
+
+    public required string LastKeyFromPage { get; init; }
 }
 
 /// <summary>Resumo da biblioteca para os testes.</summary>

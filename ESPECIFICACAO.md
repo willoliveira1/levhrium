@@ -105,6 +105,39 @@ Não para anúncio servido do domínio da própria página — limitação aceit
 
 `AreBrowserAcceleratorKeysEnabled = false`: os atalhos são do Levhrium, não do Edge.
 
+### Como a tecla chega até aqui
+
+Há **dois caminhos de teclado**, e isso não é detalhe de implementação — é a
+causa de um bug que chegou ao uso real:
+
+- **Foco na casca** (barra de endereço, faixa de abas): a tecla entra pela fila de
+  mensagens do WinForms e o `ProcessCmdKey` do formulário é chamado.
+- **Foco dentro da página**: o WebView2 roda **em outro processo**. O `WM_KEYDOWN`
+  vai para a janela do Chromium e **nunca aparece na nossa fila** — o
+  `ProcessCmdKey` não é chamado. A tecla só chega ao host pelo evento `KeyDown`
+  do próprio controle WebView2, que o controle levanta a partir do tratamento de
+  acelerador. É preciso marcar `Handled` e `SuppressKeyPress`, senão o atalho
+  também vaza para o site.
+
+Os dois caminhos chamam a mesma tabela (`TryHandleHotkey`). O evento bloqueia o
+processo do browser enquanto roda, então o handler só reconhece a tecla e enfileira
+a ação na UI.
+
+**O que os testes conseguem e não conseguem provar:**
+
+| Caminho | Como é testado |
+|---|---|
+| Tabela de atalhos | named pipe chama `TryHandleHotkey` — 8 testes |
+| Tecla comum chega ao site | Playwright digita num campo — 1 teste |
+| **Tecla física com foco na página** | **não automatizado** |
+
+O último não tem teste porque teclas enviadas pelo Playwright entram pelo CDP
+direto no renderer e **não passam pelo tratamento de acelerador**: um teste de
+`Ctrl+T` por ali falha mesmo com o atalho funcionando. E `SendInput` exige a
+janela em primeiro plano, o que um processo em segundo plano não consegue obter
+no Windows. **Esse caminho precisa de verificação manual**: abrir o navegador,
+clicar na página e apertar `Ctrl+T`.
+
 ## Disco
 
 `%LOCALAPPDATA%\Levhrium\` com:

@@ -74,4 +74,10 @@ public sealed record BrowserState
     /// Nulo significa usar o padrao da politica.
     /// </summary>
     public int? HibernateAfterMinutes { get; init; }
+
+    /// <summary>
+    /// Dominios que nunca hibernam, escolhidos por quem usa. Subdominios contam:
+    /// "jogo.com" protege "mundo.jogo.com".
+    /// </summary>
+    public IReadOnlyList<string> NeverHibernateDomains { get; init; } = [];
 }

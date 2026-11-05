@@ -5,6 +5,7 @@ namespace Levhrium.Core.Tests;
 /// <summary>
 /// A politica de hibernacao. Testada com rigor porque hibernar a aba errada
 /// trava o progresso de um jogo idle -- o cenario que o projeto existe para servir.
+/// A lista de dominios protegidos vem vazia: quem usa escolhe quais sao.
 /// </summary>
 public sealed class HibernationPolicyTests
 {
@@ -80,11 +81,24 @@ public sealed class HibernationPolicyTests
     [Fact]
     public void DominioProtegidoNuncaHiberna()
     {
-        var policy = new HibernationPolicy();
+        var policy = new HibernationPolicy(neverHibernate: ["jogo.test"]);
 
         Assert.Equal(
             HibernationAction.None,
-            policy.Decide(Aba(url: "https://poke.sigmaproject.online/play", ociosaHaMinutos: 600), Agora));
+            policy.Decide(Aba(url: "https://jogo.test/play", ociosaHaMinutos: 600), Agora));
+    }
+
+    [Fact]
+    public void SemListaConfiguradaNadaEProtegido()
+    {
+        // A lista vem vazia de fabrica: dominio protegido e escolha de quem usa,
+        // nao algo que o navegador traz embutido.
+        var policy = new HibernationPolicy();
+
+        Assert.Empty(policy.NeverHibernateDomains);
+        Assert.Equal(
+            HibernationAction.Suspend,
+            policy.Decide(Aba(url: "https://jogo.test/play", ociosaHaMinutos: 600), Agora));
     }
 
     [Fact]
@@ -135,9 +149,9 @@ public sealed class HibernationPolicyTests
     [Fact]
     public void AbaDeDominioProtegidoNasceFixada()
     {
-        var policy = new HibernationPolicy();
+        var policy = new HibernationPolicy(neverHibernate: ["jogo.test"]);
 
-        Assert.True(policy.ShouldPinOnOpen("https://poke.sigmaproject.online/play"));
+        Assert.True(policy.ShouldPinOnOpen("https://jogo.test/play"));
         Assert.False(policy.ShouldPinOnOpen("https://exemplo.com/"));
     }
 

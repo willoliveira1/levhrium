@@ -8,9 +8,9 @@ using Microsoft.Extensions.Logging;
 namespace Levhrium.E2E.Tests;
 
 /// <summary>
-/// Servidor local com paginas deterministicas. Os testes nunca batem em
-/// poke.sigmaproject.online: exigiria credenciais no repositorio, quebraria quando
-/// o jogo mudasse e marteleria um servico de terceiro em cada execucao.
+/// Servidor local com paginas deterministicas. Os testes nunca batem num site
+/// real: exigiria credenciais no repositorio, quebraria quando o site mudasse e
+/// marteleria um servico de terceiro em cada execucao.
 /// </summary>
 public sealed class FixtureServer : IAsyncDisposable
 {

@@ -32,6 +32,9 @@ internal sealed class MainForm : Form, IAutomationTarget
     /// <summary>Limiar de hibernacao em minutos, ajustavel nas configuracoes.</summary>
     private int _hibernateMinutes;
 
+    /// <summary>Dominios que nunca hibernam, vindos do estado gravado.</summary>
+    private readonly List<string> _neverHibernate;
+
     /// <summary>Diagnostico de teclado: toda tecla vinda da pagina conta aqui.</summary>
     private int _keysFromPage;
     private string _lastKeyFromPage = string.Empty;
@@ -76,9 +79,11 @@ internal sealed class MainForm : Form, IAutomationTarget
             ? (int)Math.Round(options.IdleThreshold.TotalMinutes)
             : _restoredState.HibernateAfterMinutes ?? (int)HibernationPolicy.DefaultIdleThreshold.TotalMinutes;
 
+        _neverHibernate = [.. _restoredState.NeverHibernateDomains];
+
         _hibernationPolicy = options.IdleThresholdWasSet
-            ? new HibernationPolicy(options.IdleThreshold)
-            : new HibernationPolicy(TimeSpan.FromMinutes(_hibernateMinutes));
+            ? new HibernationPolicy(options.IdleThreshold, _neverHibernate)
+            : new HibernationPolicy(TimeSpan.FromMinutes(_hibernateMinutes), _neverHibernate);
 
         _hibernation = new HibernationService(_session, () => _hibernationPolicy, id => _views.GetValueOrDefault(id));
 
@@ -874,7 +879,7 @@ internal sealed class MainForm : Form, IAutomationTarget
                 _hibernateMinutes = minutes;
 
                 // Troca a politica na hora: o servico le por funcao a cada tique.
-                _hibernationPolicy = new HibernationPolicy(TimeSpan.FromMinutes(minutes));
+                _hibernationPolicy = new HibernationPolicy(TimeSpan.FromMinutes(minutes), _neverHibernate);
                 ScheduleSave();
             });
 
@@ -920,6 +925,7 @@ internal sealed class MainForm : Form, IAutomationTarget
             _session.ClosedTabs) with
         {
             HibernateAfterMinutes = _hibernateMinutes,
+            NeverHibernateDomains = _neverHibernate,
         };
 
         _stateStore.Save(state);

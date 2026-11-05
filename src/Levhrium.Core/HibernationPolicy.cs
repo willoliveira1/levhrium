@@ -37,14 +37,13 @@ public sealed class HibernationPolicy
     public static readonly TimeSpan DefaultIdleThreshold = TimeSpan.FromMinutes(5);
 
     /// <summary>
-    /// Dominios que nunca hibernam. Abas destes dominios tambem nascem fixadas:
-    /// um jogo idle congelado para de progredir.
+    /// Vazia de proposito. Dominios que nunca hibernam sao escolha de quem usa,
+    /// gravada em state.json: um navegador nao deve vir com o site de alguem
+    /// embutido. Abas de dominio protegido tambem nascem fixadas, porque um jogo
+    /// idle congelado para de progredir.
     /// </summary>
     public static readonly IReadOnlySet<string> DefaultNeverHibernate =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "poke.sigmaproject.online",
-        };
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     private readonly HashSet<string> _neverHibernate;
 

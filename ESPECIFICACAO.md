@@ -5,8 +5,9 @@ Navegador Chromium leve para uso diário pessoal, com containers por aba.
 ## Objetivo
 
 Dois requisitos mandam no projeto: **RAM baixa** e **múltiplas contas do mesmo site
-simultaneamente** (caso motivador: duas contas do PokeIdle, que permite mais de uma
-conta mas só uma por navegador).
+simultaneamente**. O caso motivador foi um jogo idle de navegador que permite mais de
+uma conta, mas só uma por navegador — e que não pode ser congelado, senão para de
+progredir.
 
 - **Plataforma:** Windows 10 22H2 x64 e Windows 11 x64. Nenhuma concessão a portabilidade.
 - **Métrica primária:** RAM. Secundária: abertura a frio. Disco: irrelevante.
@@ -49,8 +50,8 @@ browser. A alternativa (uma pasta por container) sobe um runtime inteiro por con
 - Isola cookies, `localStorage`, `IndexedDB`, cache e autofill.
 - Implementação: `webView.CreationProperties.ProfileName = "<container>"`.
 
-Confirmado que o limite de conta do jogo é de armazenamento (janela anônima permite
-a segunda conta), então containers resolvem.
+Confirmado que o limite de conta do site motivador é de armazenamento (janela anônima
+permite a segunda conta), então containers resolvem.
 
 ## Hibernação
 
@@ -59,7 +60,9 @@ Onde a RAM é ganha.
 - Aba em fundo **suspensa após 5 min** (`TrySuspendAsync`: congela, não descarta).
 - `MemoryUsageTargetLevel = Low` em tudo que está em fundo.
 - **Pin isenta a aba de hibernação pra sempre.**
-- Lista de domínios **nunca-hibernar**, com o jogo dentro; abas do jogo nascem fixadas.
+- Lista de domínios **nunca-hibernar**, vazia de fábrica e gravada em `state.json`:
+  um navegador não vem com o site de ninguém embutido. Abas de domínio protegido
+  nascem fixadas.
 - Sem descarte-e-recarga na v1: perder progresso de jogo idle é pior que gastar 100 MB.
 
 ## Escopo da v1
@@ -214,10 +217,9 @@ símbolos `remote-debugging-port`, `AutomationServer`, `Handshake`, `get-state` 
 
 ### Fixtures locais, nunca o jogo real
 
-Kestrel sobe junto do teste servindo páginas determinísticas. Testar contra
-`poke.sigmaproject.online` exigiria credenciais no repositório, quebraria quando o jogo
-mudasse e marteleria um serviço de terceiro a cada `dotnet test`. O jogo real entra só
-na validação manual.
+Kestrel sobe junto do teste servindo páginas determinísticas. Testar contra um site
+real exigiria credenciais no repositório, quebraria quando o site mudasse e marteleria
+um serviço de terceiro a cada `dotnet test`. Sites reais entram só na validação manual.
 
 ## Marcos
 
@@ -255,6 +257,16 @@ pelo `@users.noreply.github.com` do GitHub, e varrido: zero ocorrências do e-ma
 do usuário do Windows ou de caminhos locais em qualquer objeto do git.
 Arquivos de ferramentas de IA e de sessão estão no `.gitignore`.
 
+## Pendente
+
+Combinado e ainda não feito:
+
+1. **Sugestões na barra de endereço** — modo busca com histórico e favoritos ao
+   digitar. Hoje digitar é às cegas. Desenhado na prancha da barra de endereço.
+2. **Condensar a suíte E2E** — 49 testes de integração/UI levam ~2 minutos porque
+   cada um sobe um Levhrium e um runtime WebView2 inteiros. Agrupar os que podem
+   dividir uma instância, e cortar o que já está coberto por teste unitário.
+
 ## Riscos conhecidos
 
 1. **Nem toda aba de fundo aceita congelar.** Na medição do M3, 6 das 9 abas de
@@ -279,7 +291,7 @@ Arquivos de ferramentas de IA e de sessão estão no `.gitignore`.
 dotnet build -c Debug
 dotnet test                 # 154 unitários + 49 de integração/UI/visual
 dotnet run --project src/Levhrium.App
-dotnet run --project src/Levhrium.App -- --url https://poke.sigmaproject.online/play
+dotnet run --project src/Levhrium.App -- --url https://exemplo.com
 ```
 
 Opções de linha de comando:

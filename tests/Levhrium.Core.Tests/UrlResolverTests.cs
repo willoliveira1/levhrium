@@ -12,7 +12,7 @@ public sealed class UrlResolverTests
         new("Teste", "https://busca.exemplo/?q={0}");
 
     [Theory]
-    [InlineData("https://poke.sigmaproject.online/play", "https://poke.sigmaproject.online/play")]
+    [InlineData("https://jogo.test/play", "https://jogo.test/play")]
     [InlineData("http://exemplo.com", "http://exemplo.com/")]
     [InlineData("about:blank", "about:blank")]
     public void MantemUrlComEsquemaExplicito(string input, string expected)
@@ -21,7 +21,7 @@ public sealed class UrlResolverTests
     }
 
     [Theory]
-    [InlineData("poke.sigmaproject.online", "https://poke.sigmaproject.online/")]
+    [InlineData("jogo.test", "https://jogo.test/")]
     [InlineData("exemplo.com/caminho?a=1", "https://exemplo.com/caminho?a=1")]
     [InlineData("8.8.8.8", "https://8.8.8.8/")]
     public void CompletaComHttpsQuandoParecerHostPublico(string input, string expected)
@@ -53,7 +53,7 @@ public sealed class UrlResolverTests
     }
 
     [Theory]
-    [InlineData("pokeidle como pegar shiny")]
+    [InlineData("como pegar shiny no jogo")]
     [InlineData("exemplo com espaco.com")]
     [InlineData("gato")]
     [InlineData("1+1")]

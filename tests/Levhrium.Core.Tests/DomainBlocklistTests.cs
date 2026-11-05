@@ -106,7 +106,7 @@ public sealed class DomainBlocklistTests
         Assert.True(list.IsBlocked("https://www.google-analytics.com/collect"));
         Assert.True(list.IsBlocked("https://stats.g.doubleclick.net/x"));
         Assert.True(list.IsBlocked("https://connect.facebook.net/sdk.js"));
-        Assert.False(list.IsBlocked("https://poke.sigmaproject.online/play"));
+        Assert.False(list.IsBlocked("https://jogo.test/play"));
     }
 
     [Fact]

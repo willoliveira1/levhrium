@@ -84,13 +84,13 @@ public sealed class AddressBarSearchTests
 
         await app.WaitForStateAsync(s => s.Tabs[0].Title == "Pagina Um", "pagina carregada");
 
-        await app.NavigateAsync("pokeidle como pegar shiny");
+        await app.NavigateAsync("como pegar shiny no jogo");
 
         var state = await app.WaitForStateAsync(
             s => s.Tabs[0].Url.Contains("google.com/search", StringComparison.OrdinalIgnoreCase),
             "termo virou busca no motor configurado");
 
-        Assert.Contains("pokeidle", state.Tabs[0].Url, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("shiny", state.Tabs[0].Url, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

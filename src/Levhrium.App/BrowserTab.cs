@@ -202,6 +202,13 @@ internal sealed class BrowserTab : IDisposable
         // DevTools esta no escopo da v1 e vem de graca no WebView2.
         settings.AreDevToolsEnabled = true;
 
+        // Preenchimento automatico. IsPasswordAutosaveEnabled vem DESLIGADO por
+        // padrao no WebView2 -- sem liga-lo, o navegador nunca oferece guardar
+        // uma senha e nenhum login ja feito volta preenchido. Guardadas no
+        // perfil do container, entao cada conta tem as suas.
+        settings.IsPasswordAutosaveEnabled = true;
+        settings.IsGeneralAutofillEnabled = true;
+
         core.DocumentTitleChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
         core.HistoryChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
 

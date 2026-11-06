@@ -137,4 +137,5 @@ internal static class Glyphs
     internal const string StarFilled = "";
     internal const string Pin = "";
     internal const string Moon = "";
+    internal const string Settings = "";
 }

@@ -56,7 +56,7 @@ internal sealed class LibraryPanel : Form
         _tabs =
         [
             new SectionTab("Favoritos", LibrarySection.Bookmarks),
-            new SectionTab("Historico", LibrarySection.History),
+            new SectionTab("Histórico", LibrarySection.History),
             new SectionTab("Downloads", LibrarySection.Downloads),
         ];
 
@@ -118,7 +118,7 @@ internal sealed class LibraryPanel : Form
         });
 
         var settings = new LibraryRow(
-            new LibraryEntry { Title = "Configuracoes", Url = string.Empty },
+            new LibraryEntry { Title = "Configurações", Url = string.Empty },
             Glyphs.Menu)
         {
             Location = new Point(Edge, PanelHeight - 37),

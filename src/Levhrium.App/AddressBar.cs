@@ -28,6 +28,7 @@ internal sealed class AddressBar : Control
     {
         BackColor = Theme.ToolbarBackground;
         ForeColor = Theme.Foreground;
+        Cursor = Cursors.IBeam;
 
         SetStyle(
             ControlStyles.AllPaintingInWmPaint |
@@ -151,6 +152,23 @@ internal sealed class AddressBar : Control
     {
         base.OnResize(e);
         LayoutChildren();
+    }
+
+    /// <summary>
+    /// Clicar na pilula entra no modo de edicao.
+    ///
+    /// Sem isto nao havia como escrever: o campo de texto fica invisivel
+    /// enquanto a barra mostra o endereco repartido, e um controle invisivel
+    /// nao recebe foco por clique. Sobrava so o Ctrl+L.
+    /// </summary>
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+
+        if (e.Button == MouseButtons.Left)
+        {
+            FocusInput();
+        }
     }
 
     protected override void OnPaint(PaintEventArgs e)

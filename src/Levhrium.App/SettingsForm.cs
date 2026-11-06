@@ -46,7 +46,7 @@ internal sealed class SettingsForm : Form
         _readHibernateMinutes = readHibernateMinutes;
         _writeHibernateMinutes = writeHibernateMinutes;
 
-        Text = "Configuracoes do " + AppPaths.ProductName;
+        Text = "Configurações do " + AppPaths.ProductName;
         BackColor = Theme.WindowBackground;
         ForeColor = Theme.Foreground;
         Font = new Font("Segoe UI", 9.5f);
@@ -60,7 +60,7 @@ internal sealed class SettingsForm : Form
 
         Controls.Add(new Label
         {
-            Text = "Configuracoes",
+            Text = "Configurações",
             AutoSize = true,
             Location = new Point(Gutter, y),
             ForeColor = Theme.Foreground,
@@ -75,7 +75,7 @@ internal sealed class SettingsForm : Form
         var linha = CardPadding - 2;
 
         var versaoTitulo = RowTitle($"{AppPaths.ProductName} {AppVersion.CurrentDisplay}");
-        _status = RowSubtitle("Clique em verificar para procurar uma versao nova.");
+        _status = RowSubtitle("Clique em verificar para procurar uma versão nova.");
         _check = new PillButton("Verificar", 104);
         _check.Click += async (_, _) => await OnCheckOrInstallAsync();
 
@@ -138,7 +138,7 @@ internal sealed class SettingsForm : Form
             Glyphs.Moon,
             Theme.Purple,
             RowTitle("Hibernar abas paradas"),
-            RowSubtitle("Abas fixadas e dominios protegidos nunca hibernam. Zero desliga."),
+            RowSubtitle("Abas fixadas e domínios protegidos nunca hibernam. Zero desliga."),
             minutos);
 
         linha += RowHeight + 16;
@@ -159,7 +159,7 @@ internal sealed class SettingsForm : Form
             Glyphs.Shield,
             Theme.Success,
             RowTitle("Bloqueio de rastreadores"),
-            RowSubtitle($"{_blocklist.Count} dominios carregados. Some um blocklist.txt na pasta de dados."),
+            RowSubtitle($"{_blocklist.Count} domínios carregados. Some um blocklist.txt na pasta de dados."),
             pasta);
 
         principal.Height = linha + RowHeight + CardPadding;
@@ -254,13 +254,13 @@ internal sealed class SettingsForm : Form
             }
             else if (result.HasUpdate)
             {
-                _status.Text = $"Versao {result.PublishedVersion!.ToString(3)} disponivel.";
+                _status.Text = $"Versão {result.PublishedVersion!.ToString(3)} disponível.";
                 _status.ForeColor = Theme.Accent;
                 _check.Text = "Baixar";
             }
             else
             {
-                _status.Text = "Voce esta na versao mais nova.";
+                _status.Text = "Você está na versão mais nova.";
                 _status.ForeColor = Theme.Success;
             }
         }
@@ -303,7 +303,7 @@ internal sealed class SettingsForm : Form
             // Sem manifesto, pacote que nao cobre o plano, ou troca recusada.
             if (check.InstallerUrl is not { Length: > 0 } url)
             {
-                _status.Text = "Nao foi possivel atualizar: a release nao tem instalador.";
+                _status.Text = "Não foi possível atualizar: a release não tem instalador.";
                 _progress.Visible = false;
                 _check.Enabled = true;
                 return;
@@ -344,7 +344,7 @@ internal sealed class SettingsForm : Form
 
         _progress.Visible = false;
         _status.Text =
-            $"Versao {prepared.Version.ToString(3)} instalada: {arquivos}, {size:0} KB.";
+            $"Versão {prepared.Version.ToString(3)} instalada: {arquivos}, {size:0} KB.";
         _status.ForeColor = Theme.Success;
 
         _restartReady = true;

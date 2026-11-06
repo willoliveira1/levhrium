@@ -50,6 +50,7 @@ internal sealed class MainForm : Form, IAutomationTarget
     private readonly IconButton _forward;
     private readonly IconButton _reload;
     private readonly IconButton _libraryButton;
+    private readonly IconButton _settingsButton;
     private readonly AddressBar _address;
     private readonly Panel _content;
 
@@ -106,7 +107,8 @@ internal sealed class MainForm : Form, IAutomationTarget
         _back = new IconButton(Glyphs.Back, "Voltar (Alt+Seta esquerda)");
         _forward = new IconButton(Glyphs.Forward, "Avancar (Alt+Seta direita)");
         _reload = new IconButton(Glyphs.Reload, "Recarregar (F5)");
-        _libraryButton = new IconButton(Glyphs.Menu, "Favoritos, historico e downloads");
+        _libraryButton = new IconButton(Glyphs.Menu, "Favoritos, histórico e downloads");
+        _settingsButton = new IconButton(Glyphs.Settings, "Configurações");
 
         _address = new AddressBar();
         _address.Submitted += OnAddressKeyDown;
@@ -132,6 +134,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         _toolbar.Controls.Add(_forward);
         _toolbar.Controls.Add(_reload);
         _toolbar.Controls.Add(_libraryButton);
+        _toolbar.Controls.Add(_settingsButton);
         _toolbar.Controls.Add(_address);
         _toolbar.Resize += (_, _) => LayoutToolbar();
 
@@ -144,6 +147,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         _forward.Click += (_, _) => ActiveView?.GoForward();
         _reload.Click += (_, _) => ActiveView?.Reload();
         _libraryButton.Click += (_, _) => ShowLibraryMenu();
+        _settingsButton.Click += (_, _) => ShowSettings();
 
         _tabStrip.TabSelected += (_, id) => _session.Activate(id);
         _tabStrip.TabCloseRequested += (_, id) => CloseTab(id);
@@ -568,8 +572,12 @@ internal sealed class MainForm : Form, IAutomationTarget
             x += button.Width + gap;
         }
 
+        _settingsButton.Location = new Point(
+            _toolbar.ClientSize.Width - _toolbar.Padding.Right - _settingsButton.Width,
+            (ToolbarHeight - _settingsButton.Height) / 2);
+
         _libraryButton.Location = new Point(
-            _toolbar.ClientSize.Width - _toolbar.Padding.Right - _libraryButton.Width,
+            _settingsButton.Left - 2 - _libraryButton.Width,
             (ToolbarHeight - _libraryButton.Height) / 2);
 
         var left = x + 6;

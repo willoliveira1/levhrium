@@ -65,6 +65,10 @@ internal sealed class AddressBar : Control
         {
             ForeColor = Theme.ForegroundDim,
             Font = new Font(Theme.IconFontName, 9f),
+
+            // Sobre a pilula, nao sobre a toolbar: sem isto a estrela fica
+            // dentro de um quadrado mais claro.
+            Backdrop = Theme.FieldBackground,
         };
         _bookmark.Click += (_, _) => BookmarkClicked?.Invoke(this, EventArgs.Empty);
 

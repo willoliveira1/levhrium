@@ -256,6 +256,42 @@ um serviço de terceiro a cada `dotnet test`. Sites reais entram só na validaç
   releases do GitHub, compara a tag (`v1.2.3`) com a versão em execução, baixa o
   instalador anexado e o executa em modo silencioso. A comparação de versões e a
   leitura da API ficam no núcleo, testadas sem rede.
+- **Atualização incremental**, a partir da v1.0.6. Cada release anexa três
+  arquivos: o instalador, um `manifest-X.Y.Z.json` com o SHA-256 de cada um dos
+  229 arquivos, e um `Levhrium-X.Y.Z-delta.zip` com o que mudou desde a release
+  anterior. O navegador compara hash a hash o que tem no disco com o manifesto
+  publicado e baixa só a diferença.
+
+  Medido entre a 1.0.5 e a 1.0.6: **4 arquivos, 367 KB** em vez dos 35,4 MB do
+  instalador — 96 vezes menos. O runtime do .NET ocupa 112 dos 113 MB e é
+  idêntico entre releases; só muda quando subimos a versão do SDK.
+
+  A troca acontece **com o navegador aberto**. O Windows recusa apagar ou
+  sobrescrever um `.exe` em execução ou uma `.dll` carregada, mas permite
+  renomear os dois: cada arquivo antigo vira `*.levhrium-old` e o novo ocupa o
+  lugar. O processo em execução segue com o código antigo em memória, a versão
+  nova vale na próxima abertura, e as sobras são varridas no início do
+  `Program.Main`. É por isso que a mensagem é "reinicie para aplicar" e não
+  "instalando".
+
+  Se qualquer passo não fechar — release sem manifesto, pacote que não cobre o
+  plano, hash que não bate, troca recusada pelo disco — o navegador cai no
+  instalador completo, que é o comportamento anterior. Uma atualização aplicada
+  pela metade deixaria o navegador sem abrir, então o `UpdateApplier` desfaz
+  tudo ao primeiro erro.
+
+  Duas armadilhas que valem registro:
+
+  - **`unins000.exe` e `unins000.dat`** ficam na pasta do programa mas pertencem
+    ao Inno Setup, não à release, e por isso nunca aparecem no manifesto. Sem
+    uma exceção explícita, toda atualização os trataria como sobra e aposentaria
+    o desinstalador.
+  - **O manifesto vem da rede** e diz onde escrever dentro da pasta do programa.
+    Uma entrada como `../../Inicializar/qualquer.exe` plantaria um arquivo em
+    vez de atualizar o navegador. Há três barreiras: o manifesto inteiro é
+    recusado se qualquer entrada tiver caminho inseguro, cada entrada do zip é
+    conferida na extração, e o `UpdateApplier` confere de novo na hora de
+    escrever.
 - **O instalador não é assinado.** O SmartScreen avisa na primeira execução. Um
   certificado de assinatura resolveria, mas é pago.
 

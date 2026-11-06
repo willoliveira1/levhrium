@@ -49,11 +49,21 @@ internal sealed class IconButton : Control
         System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal bool Muted { get; set; }
 
+    /// <summary>
+    /// Cor atras do icone. Vazia usa a do pai, que serve para os botoes da
+    /// toolbar. A estrela da barra de endereco fica sobre a pilula, nao sobre a
+    /// toolbar: sem isto ela limpa com a cor errada e pinta um quadrado mais
+    /// claro em volta de si mesma.
+    /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(
+        System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Color Backdrop { get; set; } = Color.Empty;
+
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.Clear(Parent?.BackColor ?? Theme.ToolbarBackground);
+        g.Clear(Backdrop.IsEmpty ? Parent?.BackColor ?? Theme.ToolbarBackground : Backdrop);
 
         if (_hover || _pressed)
         {

@@ -17,7 +17,7 @@ internal sealed class MainForm : Form, IAutomationTarget
     private readonly SearchEngine _searchEngine = SearchEngine.Default;
     private readonly TabSession _session;
     private HibernationPolicy _hibernationPolicy;
-    private readonly UpdateService _updates = new();
+    private readonly UpdateService _updates;
     private readonly HibernationService _hibernation;
     private readonly DomainBlocklist _blocklist;
     private readonly StateStore _stateStore;
@@ -69,6 +69,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         _restoredState = _stateStore.Load();
         _library = new Library(_restoredState);
         _paths = paths;
+        _updates = new UpdateService(paths);
         _downloadFolder = options.TestMode ? Path.Combine(paths.RootFolder, "Downloads") : null;
 
         // A linha de comando vence a configuracao gravada: e assim que os testes
@@ -804,6 +805,9 @@ internal sealed class MainForm : Form, IAutomationTarget
             _paths,
             _blocklist,
             _updates,
+            _session.Containers,
+            name => _session.Tabs.Count(tab =>
+                string.Equals(tab.Container.Name, name, StringComparison.OrdinalIgnoreCase)),
             () => _hibernateMinutes,
             minutes =>
             {

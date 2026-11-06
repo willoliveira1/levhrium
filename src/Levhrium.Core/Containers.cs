@@ -37,9 +37,8 @@ public sealed class ContainerRegistry
     /// <summary>Cores escolhidas para se distinguirem entre si no tema escuro.</summary>
     private static readonly int[] Palette =
     [
-        unchecked((int)0xFF8A8A8A), // padrao: cinza, deliberadamente discreto
+        unchecked((int)0xFFFF8A3D), // padrao: laranja
         unchecked((int)0xFF4C9AFF), // azul
-        unchecked((int)0xFFFF8A3D), // laranja
         unchecked((int)0xFF46D17F), // verde
         unchecked((int)0xFFE05A8A), // rosa
         unchecked((int)0xFFB47BFF), // roxo
@@ -99,9 +98,38 @@ public sealed class ContainerRegistry
                 continue;
             }
 
-            _containers[name] = new Container { Name = name, Color = saved.Color };
+            _containers[name] = new Container { Name = name, Color = ResolveColor(saved.Color) };
             _order.Add(name);
         }
+    }
+
+    /// <summary>
+    /// Mantem a cor gravada, a nao ser que ela ja esteja ocupada; nesse caso
+    /// pega a primeira livre da paleta.
+    ///
+    /// Duas contas com o mesmo selo apagam a unica pista de qual aba e qual --
+    /// e e exatamente o que aconteceria com quem ja tinha um container laranja
+    /// quando o padrao virou laranja na v1.0.6.
+    /// </summary>
+    private int ResolveColor(int saved)
+    {
+        var taken = _containers.Values.Select(c => c.Color).ToHashSet();
+
+        if (!taken.Contains(saved))
+        {
+            return saved;
+        }
+
+        foreach (var color in Palette)
+        {
+            if (!taken.Contains(color))
+            {
+                return color;
+            }
+        }
+
+        // Mais containers do que cores na paleta: repetir e inevitavel.
+        return Palette[_order.Count % Palette.Length];
     }
 
     /// <summary>Containers no formato de gravacao.</summary>

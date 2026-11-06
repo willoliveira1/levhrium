@@ -11,8 +11,22 @@ public sealed record UpdateCheckResult
 
     public Version? PublishedVersion { get; init; }
 
-    /// <summary>URL direta do instalador publicado.</summary>
+    /// <summary>URL direta do instalador publicado. Sempre presente numa release valida.</summary>
     public string? InstallerUrl { get; init; }
+
+    /// <summary>
+    /// Manifesto com o hash de cada arquivo da versao publicada. Quando existe,
+    /// o navegador consegue descobrir que so tres arquivos mudaram e baixar so
+    /// eles, em vez dos 35 MB do instalador.
+    /// </summary>
+    public string? ManifestUrl { get; init; }
+
+    /// <summary>Pacote com os arquivos que mudaram desde a release anterior.</summary>
+    public string? DeltaUrl { get; init; }
+
+    /// <summary>Verdadeiro quando da para tentar a atualizacao incremental.</summary>
+    public bool SupportsIncremental =>
+        HasUpdate && ManifestUrl is { Length: > 0 } && DeltaUrl is { Length: > 0 };
 
     public string? ReleaseNotes { get; init; }
 
@@ -134,8 +148,25 @@ public sealed class UpdateChecker
             HasUpdate = true,
             PublishedVersion = published,
             InstallerUrl = url,
+            ManifestUrl = FindAsset(release, name =>
+                name.StartsWith("manifest-", StringComparison.OrdinalIgnoreCase) &&
+                name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)),
+            DeltaUrl = FindAsset(release, name =>
+                name.EndsWith("-delta.zip", StringComparison.OrdinalIgnoreCase)),
             ReleaseNotes = release.Body,
         };
+    }
+
+    /// <summary>
+    /// Devolve nulo quando o anexo nao existe -- releases antigas nao tem
+    /// manifesto, e nesse caso o navegador cai para o instalador completo.
+    /// </summary>
+    private static string? FindAsset(GitHubRelease release, Func<string, bool> matches)
+    {
+        var asset = release.Assets?.FirstOrDefault(candidate =>
+            candidate.Name is { Length: > 0 } name && matches(name));
+
+        return asset?.DownloadUrl is { Length: > 0 } url ? url : null;
     }
 
     private sealed record GitHubRelease

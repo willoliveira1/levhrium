@@ -268,4 +268,63 @@ public sealed class ContainerRegistryTests
 
         Assert.Equal("Conta 3", registry.SuggestName());
     }
+    private const int Laranja = unchecked((int)0xFFFF8A3D);
+    private const int Azul = unchecked((int)0xFF4C9AFF);
+    private const int CinzaAntigo = unchecked((int)0xFF8A8A8A);
+
+    [Fact]
+    public void ContainerPadraoELaranja()
+    {
+        // Era cinza ate a v1.0.6 e ficava apagado demais para servir de selo.
+        Assert.Equal(Laranja, new ContainerRegistry().Default.Color);
+    }
+
+    [Fact]
+    public void CinzaGravadoNaoSobreviveAoPadrao()
+    {
+        var registry = new ContainerRegistry();
+        registry.Restore([new PersistedContainer { Name = "padrao", Color = CinzaAntigo }]);
+
+        Assert.Equal(Laranja, registry.Default.Color);
+    }
+
+    [Fact]
+    public void ContainerGravadoComACorDoPadraoGanhaOutra()
+    {
+        // Quem ja tinha um container laranja antes da v1.0.6 ficaria com dois
+        // selos laranja depois dela, e o selo deixaria de distinguir qualquer coisa.
+        var registry = new ContainerRegistry();
+        registry.Restore([new PersistedContainer { Name = "Trabalho", Color = Laranja }]);
+
+        var trabalho = registry.All.Single(c => c.Name == "Trabalho");
+
+        Assert.NotEqual(Laranja, trabalho.Color);
+        Assert.Equal(Azul, trabalho.Color);
+    }
+
+    [Fact]
+    public void CorGravadaQueNaoColideEMantida()
+    {
+        var registry = new ContainerRegistry();
+        registry.Restore([new PersistedContainer { Name = "Conta 2", Color = Azul }]);
+
+        Assert.Equal(Azul, registry.All.Single(c => c.Name == "Conta 2").Color);
+    }
+
+    [Fact]
+    public void TodosOsContainersSaemComCoresDiferentes()
+    {
+        var registry = new ContainerRegistry();
+        registry.Restore(
+        [
+            new PersistedContainer { Name = "padrao", Color = CinzaAntigo },
+            new PersistedContainer { Name = "Conta 2", Color = Azul },
+            new PersistedContainer { Name = "Trabalho", Color = Laranja },
+        ]);
+
+        var cores = registry.All.Select(c => c.Color).ToList();
+
+        Assert.Equal(cores.Count, cores.Distinct().Count());
+    }
+
 }

@@ -27,6 +27,20 @@ public sealed class AppPaths
     /// <summary>Arquivo hosts opcional do usuario, somado a lista embutida.</summary>
     public string BlocklistFile => Path.Combine(RootFolder, "blocklist.txt");
 
+    /// <summary>
+    /// Onde a atualizacao incremental monta os arquivos baixados antes de
+    /// troca-los. Fora da pasta do programa de proposito: um pacote corrompido
+    /// nunca chega perto da instalacao que esta funcionando.
+    /// </summary>
+    public string UpdateFolder => Path.Combine(RootFolder, "update");
+
+    /// <summary>
+    /// Pasta onde o Levhrium esta instalado, que e a do executavel em uso.
+    /// Por usuario (%LOCALAPPDATA%\Programs\Levhrium), e e isso que permite
+    /// trocar os arquivos sem pedir elevacao.
+    /// </summary>
+    public static string InstallFolder => AppContext.BaseDirectory;
+
     /// <summary>Verdadeiro so para as pastas temporarias de teste, que podem ser apagadas.</summary>
     public bool IsDisposable { get; }
 

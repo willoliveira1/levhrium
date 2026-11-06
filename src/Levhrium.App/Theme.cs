@@ -49,6 +49,28 @@ internal static class Theme
     internal static readonly Color Shield = Color.FromArgb(0x7F, 0xDC, 0xA8);
     internal static readonly Color ShieldBackground = Color.FromArgb(0x1C, 0x2E, 0x25);
 
+    /// <summary>Cartao das configuracoes: um degrau acima do fundo da janela.</summary>
+    internal static readonly Color CardBackground = Color.FromArgb(0x1A, 0x1A, 0x1E);
+    internal static readonly Color CardBorder = Color.FromArgb(0x26, 0x26, 0x2C);
+
+    /// <summary>Linha dentro de um cartao -- mais funda que o cartao, de proposito.</summary>
+    internal static readonly Color RowBackground = Color.FromArgb(0x0E, 0x0E, 0x10);
+
+    /// <summary>Contorno dos botoes-pilula, que nao tem preenchimento.</summary>
+    internal static readonly Color PillBorder = Color.FromArgb(0x35, 0x35, 0x3E);
+    internal static readonly Color PillForeground = Color.FromArgb(0xD7, 0xD7, 0xDF);
+
+    /// <summary>Texto secundario dentro dos cartoes, mais apagado que o da toolbar.</summary>
+    internal static readonly Color CardSubtitle = Color.FromArgb(0x83, 0x83, 0x8D);
+
+    /// <summary>Verde de "esta tudo certo", usado na linha de versao.</summary>
+    internal static readonly Color Success = Color.FromArgb(0x6F, 0xCF, 0x97);
+
+    internal static readonly Color Purple = Color.FromArgb(0xB4, 0x7B, 0xFF);
+
+    /// <summary>Fundo do ladrilho de icone: a propria cor, bem diluida.</summary>
+    internal static Color Tint(Color color) => Color.FromArgb(0x22, color);
+
     /// <summary>Fonte de icones do Windows; glifos em <see cref="Glyphs"/>.</summary>
     internal const string IconFontName = "Segoe MDL2 Assets";
 

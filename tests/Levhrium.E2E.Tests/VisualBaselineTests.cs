@@ -22,14 +22,20 @@ public sealed class VisualBaselineTests
     private const double Tolerance = 0.02;
 
     /// <summary>
-    /// So a faixa de abas, em coordenadas da area de cliente.
+    /// So a faixa de abas, em coordenadas da area de cliente, e so o trecho da
+    /// esquerda onde as abas de fato ficam.
     ///
-    /// Duas coisas ficam de fora de proposito: a barra de titulo, porque o
-    /// Windows a pinta de azul ou cinza conforme a janela tenha foco; e a barra
-    /// de endereco, porque mostra a porta sorteada do servidor de fixture. As
-    /// duas fariam a referencia mudar sozinha.
+    /// Tres coisas ficam de fora de proposito. A barra de titulo, porque o
+    /// Windows a pinta de azul ou cinza conforme a janela tenha foco. A barra de
+    /// endereco, porque mostra a porta sorteada do servidor de fixture. E a
+    /// ponta direita vazia da faixa: o PrintWindow nem sempre desenha a largura
+    /// inteira da janela, e o que sobra do bitmap fica branco -- uma diferenca
+    /// de 9% numa regiao que nao tem aba nenhuma, ou seja, puro ruido.
+    ///
+    /// 760px cobrem tres abas mais os botoes de nova aba e de containers, que e
+    /// tudo o que estes testes precisam enxergar.
     /// </summary>
-    private static readonly Rectangle Strip = new(0, 0, 1180, 40);
+    private static readonly Rectangle Strip = new(0, 0, 760, 40);
 
     [Fact]
     public async Task FaixaDeAbasComTresContainers()

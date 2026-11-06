@@ -83,6 +83,22 @@ public sealed class TabSession
     /// <summary>Pilha de fechadas, da mais antiga para a mais recente.</summary>
     public IReadOnlyList<ClosedTabEntry> ClosedTabs => _closed;
 
+    /// <summary>
+    /// Onde uma aba nova entra: logo depois da ultima aba do mesmo container,
+    /// nao no fim da faixa.
+    ///
+    /// Com duas contas do mesmo site abertas, o selo de cor e a unica pista de
+    /// qual aba e qual -- e ele so agrupa se as abas do mesmo container ficarem
+    /// vizinhas. Jogada no fim, a aba nova nascia longe das irmas.
+    /// </summary>
+    private int NextIndexFor(Container container)
+    {
+        var last = _tabs.FindLastIndex(tab =>
+            string.Equals(tab.Container.Name, container.Name, StringComparison.OrdinalIgnoreCase));
+
+        return last >= 0 ? last + 1 : _tabs.Count;
+    }
+
     /// <summary>Repoe a pilha de fechadas vinda do disco, respeitando o limite.</summary>
     public void RestoreClosed(IEnumerable<ClosedTabEntry> entries)
     {
@@ -106,7 +122,7 @@ public sealed class TabSession
 
         var index = atIndex is { } requested
             ? Math.Clamp(requested, 0, _tabs.Count)
-            : _tabs.Count;
+            : NextIndexFor(container);
 
         _tabs.Insert(index, tab);
 

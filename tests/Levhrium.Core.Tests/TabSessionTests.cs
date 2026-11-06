@@ -139,7 +139,11 @@ public sealed class TabSessionTests
         // Sem o container na pilha, a Conta 2 voltaria dentro da Conta 1.
         Assert.Equal("Conta 2", reaberta.Container.Name);
         Assert.Equal("https://jogo.test", reaberta.Url);
-        Assert.Equal(1, session.Tabs.ToList().IndexOf(reaberta));
+
+        // Indice 2, nao 1: abas novas nascem junto das irmas do mesmo
+        // container, entao a ordem aqui e [a, c, jogo] -- e reabrir devolve a
+        // aba ao lugar de onde ela saiu.
+        Assert.Equal(2, session.Tabs.ToList().IndexOf(reaberta));
     }
 
     [Fact]
@@ -209,6 +213,66 @@ public sealed class TabSessionTests
         Assert.Equal(-1, session.ActiveIndex);
         Assert.Null(session.Active);
     }
+    [Fact]
+    public void AbaNovaNasceJuntoDasIrmasDoMesmoContainer()
+    {
+        // Com duas contas do mesmo site, o selo de cor so agrupa se as abas do
+        // mesmo container ficarem vizinhas. Jogada no fim da faixa, a aba nova
+        // nascia longe das irmas.
+        var session = new TabSession(new ContainerRegistry());
+
+        session.Open("padrao", "https://a.test");
+        session.Open("Conta 2", "https://b.test");
+        session.Open("padrao", "https://c.test");
+
+        Assert.Equal(
+            ["padrao", "padrao", "Conta 2"],
+            session.Tabs.Select(t => t.Container.Name));
+    }
+
+    [Fact]
+    public void ContainerNovoEntraNoFim()
+    {
+        var session = new TabSession(new ContainerRegistry());
+
+        session.Open("padrao", "https://a.test");
+        session.Open("Conta 2", "https://b.test");
+        session.Open("Trabalho", "https://c.test");
+
+        Assert.Equal(
+            ["padrao", "Conta 2", "Trabalho"],
+            session.Tabs.Select(t => t.Container.Name));
+    }
+
+    [Fact]
+    public void TerceiraAbaDoContainerEntraDepoisDaSegunda()
+    {
+        var session = new TabSession(new ContainerRegistry());
+
+        session.Open("padrao", "https://a.test");
+        session.Open("Conta 2", "https://b.test");
+        session.Open("padrao", "https://c.test");
+        session.Open("padrao", "https://d.test");
+
+        Assert.Equal(
+            ["https://a.test", "https://c.test", "https://d.test", "https://b.test"],
+            session.Tabs.Select(t => t.Url));
+    }
+
+    [Fact]
+    public void IndiceExplicitoContinuaMandando()
+    {
+        // Arrastar aba e reabrir fechada passam a posicao de proposito; o
+        // agrupamento nao pode atropelar isso.
+        var session = new TabSession(new ContainerRegistry());
+
+        session.Open("padrao", "https://a.test");
+        session.Open("Conta 2", "https://b.test");
+        session.Open("padrao", "https://c.test", atIndex: 0);
+
+        Assert.Equal("https://c.test", session.Tabs[0].Url);
+    }
+
 }
 
 public sealed class ContainerRegistryTests

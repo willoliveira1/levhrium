@@ -486,19 +486,12 @@ internal sealed class MainForm : Form, IAutomationTarget
 
     private void ShowContainerMenu(Point location)
     {
-        var menu = new ContextMenuStrip
-        {
-            BackColor = Theme.ToolbarBackground,
-            ForeColor = Theme.Foreground,
-            ShowImageMargin = false,
-        };
+        var menu = DarkMenu.Create();
 
         foreach (var container in _session.Containers.All)
         {
-            var item = new ToolStripMenuItem("Nova aba em " + container.Name)
-            {
-                ForeColor = Color.FromArgb(container.Color),
-            };
+            var item = DarkMenu.Item("Nova aba em " + container.Name);
+            item.ForeColor = Color.FromArgb(container.Color);
 
             var name = container.Name;
             item.Click += (_, _) => _ = OpenTabAsync(name, HomeUrl);
@@ -508,7 +501,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         menu.Items.Add(new ToolStripSeparator());
 
         var suggestion = _session.Containers.SuggestName();
-        var create = new ToolStripMenuItem($"Novo container ({suggestion})");
+        var create = DarkMenu.Item($"Novo container ({suggestion})");
         create.Click += (_, _) => _ = OpenTabAsync(suggestion, HomeUrl);
         menu.Items.Add(create);
 
@@ -640,13 +633,6 @@ internal sealed class MainForm : Form, IAutomationTarget
 
     // ---- Biblioteca: favoritos, historico, downloads e zoom ----
 
-    private enum LibrarySection
-    {
-        Bookmarks,
-        History,
-        Downloads,
-    }
-
     /// <summary>
     /// Liga a aba a biblioteca: cada pagina carregada vira historico, o zoom do
     /// site e reaplicado e os downloads entram na lista.
@@ -723,80 +709,36 @@ internal sealed class MainForm : Form, IAutomationTarget
     /// Menu unico para favoritos, historico e downloads. Um menu custa muito
     /// menos codigo que uma janela de biblioteca e resolve o mesmo uso.
     /// </summary>
+    /// <summary>
+    /// Abre o painel da biblioteca ancorado no botao. Painel e nao menu porque
+    /// um ContextMenuStrip nao aceita campo de busca dentro.
+    /// </summary>
     private void ShowLibraryMenu(LibrarySection section = LibrarySection.Bookmarks)
     {
-        var menu = new ContextMenuStrip
+        var panel = new LibraryPanel(section, Load);
+
+        panel.ItemChosen += (_, url) => _ = OpenTabAsync(ContainerRegistry.DefaultName, url);
+        panel.SettingsRequested += (_, _) => ShowSettings();
+
+        // Ancorado pela direita do botao, sem passar da borda da tela.
+        var canto = _libraryButton.PointToScreen(new Point(_libraryButton.Width, _libraryButton.Height + 4));
+        var area = Screen.FromControl(this).WorkingArea;
+
+        panel.Location = new Point(
+            Math.Max(area.Left, Math.Min(canto.X - panel.Width, area.Right - panel.Width)),
+            Math.Min(canto.Y, area.Bottom - panel.Height));
+
+        panel.Show(this);
+
+        IReadOnlyList<LibraryEntry> Load(LibrarySection pedida) => pedida switch
         {
-            BackColor = Theme.ToolbarBackground,
-            ForeColor = Theme.Foreground,
-            ShowImageMargin = false,
+            LibrarySection.History =>
+                [.. _library.History.Select(h => new LibraryEntry { Title = h.Title, Url = h.Url })],
+            LibrarySection.Downloads =>
+                [.. _library.Downloads.Select(d => new LibraryEntry { Title = d.FileName, Url = d.Url })],
+            _ =>
+                [.. _library.Bookmarks.Select(b => new LibraryEntry { Title = b.Title, Url = b.Url })],
         };
-
-        var favorita = ActiveView is { } active && _library.IsBookmarked(active.Url);
-        var toggle = new ToolStripMenuItem(
-            favorita ? "Remover dos favoritos (Ctrl+D)" : "Adicionar aos favoritos (Ctrl+D)");
-        toggle.Click += (_, _) => ToggleBookmark();
-        menu.Items.Add(toggle);
-        menu.Items.Add(new ToolStripSeparator());
-
-        AppendSection(menu, "Favoritos", section == LibrarySection.Bookmarks,
-            [.. _library.Bookmarks.Take(15).Select(b => (b.Title, b.Url))]);
-
-        AppendSection(menu, "Historico (Ctrl+H)", section == LibrarySection.History,
-            [.. _library.History.Take(15).Select(h => (h.Title, h.Url))]);
-
-        AppendSection(menu, "Downloads (Ctrl+J)", section == LibrarySection.Downloads,
-            [.. _library.Downloads.Take(15).Select(d => (d.FileName, d.Url))]);
-
-        menu.Items.Add(new ToolStripSeparator());
-
-        var settings = new ToolStripMenuItem("Configuracoes...");
-        settings.Click += (_, _) => ShowSettings();
-        menu.Items.Add(settings);
-
-        menu.Show(_libraryButton, new Point(0, _libraryButton.Height));
-    }
-
-    /// <summary>
-    /// A secao pedida vem aberta na raiz; as outras ficam em submenu, para o
-    /// Ctrl+H cair no historico sem mais um clique.
-    /// </summary>
-    private void AppendSection(
-        ContextMenuStrip menu,
-        string title,
-        bool expanded,
-        IReadOnlyList<(string Title, string Url)> entries)
-    {
-        if (entries.Count == 0)
-        {
-            var vazio = new ToolStripMenuItem(title + " (vazio)") { Enabled = false };
-            menu.Items.Add(vazio);
-            return;
-        }
-
-        var items = entries.Select(entry =>
-        {
-            var item = new ToolStripMenuItem(Shorten(entry.Title))
-            {
-                ToolTipText = entry.Url,
-            };
-
-            var url = entry.Url;
-            item.Click += (_, _) => _ = OpenTabAsync(ContainerRegistry.DefaultName, url);
-            return (ToolStripItem)item;
-        }).ToArray();
-
-        if (expanded)
-        {
-            menu.Items.Add(new ToolStripMenuItem(title) { Enabled = false });
-            menu.Items.AddRange(items);
-            menu.Items.Add(new ToolStripSeparator());
-            return;
-        }
-
-        var parent = new ToolStripMenuItem(title);
-        parent.DropDownItems.AddRange(items);
-        menu.Items.Add(parent);
     }
 
     private void ShowSettings()
@@ -805,9 +747,6 @@ internal sealed class MainForm : Form, IAutomationTarget
             _paths,
             _blocklist,
             _updates,
-            _session.Containers,
-            name => _session.Tabs.Count(tab =>
-                string.Equals(tab.Container.Name, name, StringComparison.OrdinalIgnoreCase)),
             () => _hibernateMinutes,
             minutes =>
             {
@@ -820,9 +759,6 @@ internal sealed class MainForm : Form, IAutomationTarget
 
         dialog.ShowDialog(this);
     }
-
-    private static string Shorten(string text) =>
-        text.Length <= 60 ? text : text[..57] + "...";
 
     // ---- Persistencia ----
 

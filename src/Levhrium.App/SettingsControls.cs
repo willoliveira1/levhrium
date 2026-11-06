@@ -13,7 +13,11 @@ internal sealed class Card : Panel
 
     internal Card()
     {
-        BackColor = Theme.WindowBackground;
+        // O BackColor descreve o INTERIOR do cartao, nao a moldura: e dele que
+        // os filhos (botoes-pilula, ladrilhos) se servem para limpar o proprio
+        // fundo. Com a cor da janela aqui, cada botao redondo aparecia dentro
+        // de um retangulo mais escuro.
+        BackColor = Theme.CardBackground;
         DoubleBuffered = true;
         SetStyle(
             ControlStyles.AllPaintingInWmPaint |
@@ -28,7 +32,9 @@ internal sealed class Card : Panel
 
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.Clear(Theme.WindowBackground);
+
+        // Os cantos arredondados deixam ver o que esta atras do cartao.
+        g.Clear(Parent?.BackColor ?? Theme.WindowBackground);
 
         var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
 
@@ -51,7 +57,7 @@ internal sealed class SunkenRow : Panel
 
     internal SunkenRow()
     {
-        BackColor = Theme.CardBackground;
+        BackColor = Theme.RowBackground;
         DoubleBuffered = true;
         SetStyle(
             ControlStyles.AllPaintingInWmPaint |
@@ -71,7 +77,7 @@ internal sealed class SunkenRow : Panel
 
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.Clear(Theme.CardBackground);
+        g.Clear(Parent?.BackColor ?? Theme.CardBackground);
 
         using (var path = Theme.RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), Radius))
         using (var fill = new SolidBrush(Theme.RowBackground))

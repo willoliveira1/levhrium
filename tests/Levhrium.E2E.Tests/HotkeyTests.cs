@@ -138,7 +138,11 @@ public sealed class HotkeyTests
 
         await app.WaitForStateAsync(s => s.Tabs.Count == 1, "primeira aba");
         await app.NewTabAsync("Conta 2", fixtures.Url("/dois"));
-        await app.NewTabAsync("padrao", fixtures.Url("/um"));
+
+        // Tres containers distintos de proposito: abas novas nascem junto das
+        // irmas do mesmo container, entao repetir "padrao" aqui colocaria a
+        // terceira aba no meio e a Conta 2 deixaria de ser a do meio.
+        await app.NewTabAsync("Conta 3", fixtures.Url("/um"));
         await app.WaitForStateAsync(s => s.Tabs.Count == 3, "tres abas");
 
         await app.CloseTabAsync(1);

@@ -20,8 +20,6 @@ internal sealed class SettingsForm : Form
     private readonly AppPaths _paths;
     private readonly DomainBlocklist _blocklist;
     private readonly UpdateService _updates;
-    private readonly ContainerRegistry _containers;
-    private readonly Func<string, int> _countTabs;
     private readonly Func<int> _readHibernateMinutes;
     private readonly Action<int> _writeHibernateMinutes;
 
@@ -39,16 +37,12 @@ internal sealed class SettingsForm : Form
         AppPaths paths,
         DomainBlocklist blocklist,
         UpdateService updates,
-        ContainerRegistry containers,
-        Func<string, int> countTabs,
         Func<int> readHibernateMinutes,
         Action<int> writeHibernateMinutes)
     {
         _paths = paths;
         _blocklist = blocklist;
         _updates = updates;
-        _containers = containers;
-        _countTabs = countTabs;
         _readHibernateMinutes = readHibernateMinutes;
         _writeHibernateMinutes = writeHibernateMinutes;
 
@@ -171,95 +165,7 @@ internal sealed class SettingsForm : Form
         principal.Height = linha + RowHeight + CardPadding;
         Controls.Add(principal);
 
-        y += principal.Height + 14;
-
-        // ---- Cartao 2: containers ----
-
-        var cartaoContainers = new Card { Location = new Point(Gutter, y), Width = cardWidth };
-
-        cartaoContainers.Controls.Add(new Label
-        {
-            Text = "Containers",
-            AutoSize = true,
-            Location = new Point(CardPadding, CardPadding - 2),
-            ForeColor = Theme.Foreground,
-            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-        });
-
-        var topo = CardPadding + 24;
-
-        foreach (var container in _containers.All)
-        {
-            var abas = _countTabs(container.Name);
-
-            var item = new SunkenRow
-            {
-                Location = new Point(CardPadding, topo),
-                Size = new Size(cardWidth - (CardPadding * 2), 32),
-                Dot = Color.FromArgb(container.Color),
-            };
-
-            item.Controls.Add(new Label
-            {
-                Text = container.Name,
-                AutoSize = true,
-                Location = new Point(30, 8),
-                ForeColor = Theme.Foreground,
-                BackColor = Theme.RowBackground,
-            });
-
-            var contagem = abas switch
-            {
-                0 => "vazio",
-                1 => "1 aba",
-                _ => $"{abas} abas",
-            };
-
-            var rotulo = new Label
-            {
-                Text = contagem,
-                AutoSize = true,
-                ForeColor = Theme.ForegroundFaint,
-                BackColor = Theme.RowBackground,
-            };
-
-            item.Controls.Add(rotulo);
-            rotulo.Location = new Point(item.Width - rotulo.PreferredWidth - 14, 9);
-
-            cartaoContainers.Controls.Add(item);
-            topo += 39;
-        }
-
-        cartaoContainers.Height = topo - 7 + CardPadding;
-        Controls.Add(cartaoContainers);
-
-        y += cartaoContainers.Height + 14;
-
-        // ---- Rodape ----
-
-        var nota = new Label
-        {
-            Text =
-                "Containers sao criados abrindo uma aba pelo menu da faixa. Renomear, " +
-                "trocar a cor e limpar os dados de uma conta ainda nao existem.",
-            Location = new Point(Gutter + 14, y + 12),
-            Size = new Size(cardWidth - 28, 34),
-            ForeColor = Theme.ForegroundDim,
-            BackColor = Theme.CardBackground,
-        };
-
-        var rodape = new Card
-        {
-            Location = new Point(Gutter, y),
-            Width = cardWidth,
-            Height = 58,
-        };
-
-        rodape.Controls.Add(nota);
-        nota.Location = new Point(14, 12);
-        Controls.Add(rodape);
-
-        ClientSize = new Size(cardWidth + (Gutter * 2), y + rodape.Height + Gutter);
+        ClientSize = new Size(cardWidth + (Gutter * 2), y + principal.Height + Gutter);
     }
 
     protected override void OnHandleCreated(EventArgs e)

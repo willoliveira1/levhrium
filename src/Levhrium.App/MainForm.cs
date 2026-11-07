@@ -53,6 +53,14 @@ internal sealed class MainForm : Form, IAutomationTarget
     private readonly IconButton _settingsButton;
     private readonly AddressBar _address;
     private readonly SuggestionPopup _suggestions = new();
+    private readonly StatusBar _statusBar = new();
+    private readonly ResourceMonitor _monitor;
+
+    /// <summary>Barra de status no rodape; desligada por padrao.</summary>
+    private bool _showStatusBar;
+
+    /// <summary>Limiar guardado ao desligar o modo economico pelo rodape.</summary>
+    private int _lastEconomyMinutes = (int)HibernationPolicy.DefaultIdleThreshold.TotalMinutes;
     private readonly Panel _content;
 
     private readonly TaskCompletionSource _ready =
@@ -72,6 +80,11 @@ internal sealed class MainForm : Form, IAutomationTarget
         _library = new Library(_restoredState);
         _paths = paths;
         _updates = new UpdateService(paths);
+
+        // So mede com a janela aberta na tela: medir custa CPU, e gastar CPU
+        // para mostrar CPU de uma janela que ninguem esta vendo e desperdicio.
+        _monitor = new ResourceMonitor(() => WindowState != FormWindowState.Minimized && Visible);
+        _monitor.Sampled += (_, amostra) => _statusBar.Sample = amostra;
         _downloadFolder = options.TestMode ? Path.Combine(paths.RootFolder, "Downloads") : null;
 
         // A linha de comando vence a configuracao gravada: e assim que os testes
@@ -155,8 +168,11 @@ internal sealed class MainForm : Form, IAutomationTarget
 
         // Ordem importa: o Fill entra primeiro, os Top empilham por cima.
         Controls.Add(_content);
+        Controls.Add(_statusBar);
         Controls.Add(_toolbar);
         Controls.Add(_tabStrip);
+
+        _statusBar.EconomyToggled += (_, _) => ToggleEconomy();
 
         _back.Click += (_, _) => ActiveView?.GoBack();
         _forward.Click += (_, _) => ActiveView?.GoForward();
@@ -206,6 +222,8 @@ internal sealed class MainForm : Form, IAutomationTarget
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
+        ShowStatusBar(_restoredState.ShowStatusBar);
+
         LayoutToolbar();
         _ = InitializeAsync();
     }
@@ -604,6 +622,52 @@ internal sealed class MainForm : Form, IAutomationTarget
     /// Leva a aba ativa para o endereco. Sem aba aberta, abre uma -- o unico
     /// caso em que clicar num favorito cria aba.
     /// </summary>
+    /// <summary>
+    /// Liga ou desliga a barra de status. O medidor so roda enquanto ela
+    /// estiver na tela -- com a barra escondida, ninguem veria o numero e a
+    /// medicao seria CPU jogada fora.
+    /// </summary>
+    private void ShowStatusBar(bool show)
+    {
+        _showStatusBar = show;
+        _statusBar.Visible = show;
+        _statusBar.Economy = _hibernateMinutes > 0;
+
+        if (show)
+        {
+            _monitor.Start();
+        }
+        else
+        {
+            _monitor.Stop();
+        }
+    }
+
+    /// <summary>
+    /// O chip do rodape liga e desliga a hibernacao. Desligar guarda o valor
+    /// anterior para que religar devolva o mesmo limiar, em vez de cair no
+    /// padrao e mudar o comportamento sem avisar.
+    /// </summary>
+    private void ToggleEconomy()
+    {
+        if (_hibernateMinutes > 0)
+        {
+            _lastEconomyMinutes = _hibernateMinutes;
+            ApplyHibernateMinutes(0);
+            return;
+        }
+
+        ApplyHibernateMinutes(_lastEconomyMinutes);
+    }
+
+    private void ApplyHibernateMinutes(int minutes)
+    {
+        _hibernateMinutes = minutes;
+        _hibernationPolicy = new HibernationPolicy(TimeSpan.FromMinutes(minutes), _neverHibernate);
+        _statusBar.Economy = minutes > 0;
+        ScheduleSave();
+    }
+
     private void NavigateActive(string url)
     {
         if (ActiveView is { } view)
@@ -846,6 +910,13 @@ internal sealed class MainForm : Form, IAutomationTarget
 
                 // Troca a politica na hora: o servico le por funcao a cada tique.
                 _hibernationPolicy = new HibernationPolicy(TimeSpan.FromMinutes(minutes), _neverHibernate);
+                _statusBar.Economy = minutes > 0;
+                ScheduleSave();
+            },
+            () => _showStatusBar,
+            show =>
+            {
+                ShowStatusBar(show);
                 ScheduleSave();
             });
 
@@ -889,6 +960,7 @@ internal sealed class MainForm : Form, IAutomationTarget
         {
             HibernateAfterMinutes = _hibernateMinutes,
             NeverHibernateDomains = _neverHibernate,
+            ShowStatusBar = _showStatusBar,
         };
 
         _stateStore.Save(state);
@@ -897,6 +969,7 @@ internal sealed class MainForm : Form, IAutomationTarget
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         _suggestions.Dispose();
+        _monitor.Dispose();
 
         // Grava na saida sem esperar o atraso: fechar nao pode perder a sessao.
         _saveTimer.Stop();

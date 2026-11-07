@@ -126,6 +126,8 @@ internal static class Program
             DomainBlocklist.LoadOrSeed(null),
             updates,
             () => 5,
+            _ => { },
+            () => true,
             _ => { });
 
         Application.Run(settings);

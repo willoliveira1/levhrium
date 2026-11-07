@@ -138,4 +138,5 @@ internal static class Glyphs
     internal const string Pin = "";
     internal const string Moon = "";
     internal const string Settings = "";
+    internal const string Gauge = "";
 }

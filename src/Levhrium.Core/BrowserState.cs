@@ -80,4 +80,10 @@ public sealed record BrowserState
     /// "jogo.com" protege "mundo.jogo.com".
     /// </summary>
     public IReadOnlyList<string> NeverHibernateDomains { get; init; } = [];
+
+    /// <summary>
+    /// Barra de status no rodape. Desligada por padrao: ela custa 22px de
+    /// altura da pagina, e ninguem deve pagar pixels por algo que nao pediu.
+    /// </summary>
+    public bool ShowStatusBar { get; init; }
 }

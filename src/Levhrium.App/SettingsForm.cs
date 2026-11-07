@@ -22,6 +22,7 @@ internal sealed class SettingsForm : Form
     private readonly UpdateService _updates;
     private readonly Func<int> _readHibernateMinutes;
     private readonly Action<int> _writeHibernateMinutes;
+    private readonly Action<bool> _writeStatusBar;
 
     private readonly Label _status;
     private readonly PillButton _check;
@@ -38,13 +39,16 @@ internal sealed class SettingsForm : Form
         DomainBlocklist blocklist,
         UpdateService updates,
         Func<int> readHibernateMinutes,
-        Action<int> writeHibernateMinutes)
+        Action<int> writeHibernateMinutes,
+        Func<bool> readStatusBar,
+        Action<bool> writeStatusBar)
     {
         _paths = paths;
         _blocklist = blocklist;
         _updates = updates;
         _readHibernateMinutes = readHibernateMinutes;
         _writeHibernateMinutes = writeHibernateMinutes;
+        _writeStatusBar = writeStatusBar;
 
         Text = "Configurações do " + AppPaths.ProductName;
         BackColor = Theme.WindowBackground;
@@ -161,6 +165,34 @@ internal sealed class SettingsForm : Form
             RowTitle("Bloqueio de rastreadores"),
             RowSubtitle($"{_blocklist.Count} domínios carregados. Some um blocklist.txt na pasta de dados."),
             pasta);
+
+        linha += RowHeight + 16;
+        principal.Controls.Add(new Divider
+        {
+            Location = new Point(CardPadding, linha),
+            Width = cardWidth - (CardPadding * 2),
+        });
+
+        linha += 15;
+
+        var ligada = readStatusBar();
+        var barra = new PillButton(ligada ? "Ligada" : "Desligada", 104);
+
+        barra.Click += (_, _) =>
+        {
+            ligada = !ligada;
+            barra.Text = ligada ? "Ligada" : "Desligada";
+            _writeStatusBar(ligada);
+        };
+
+        AddRow(
+            principal,
+            linha,
+            Glyphs.Gauge,
+            Theme.Accent,
+            RowTitle("Barra de status"),
+            RowSubtitle("Mostra memória e CPU no rodapé. Custa 22px de altura da página."),
+            barra);
 
         principal.Height = linha + RowHeight + CardPadding;
         Controls.Add(principal);

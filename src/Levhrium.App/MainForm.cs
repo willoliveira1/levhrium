@@ -59,8 +59,6 @@ internal sealed class MainForm : Form, IAutomationTarget
     /// <summary>Barra de status no rodape; desligada por padrao.</summary>
     private bool _showStatusBar;
 
-    /// <summary>Limiar guardado ao desligar o modo economico pelo rodape.</summary>
-    private int _lastEconomyMinutes = (int)HibernationPolicy.DefaultIdleThreshold.TotalMinutes;
     private readonly Panel _content;
 
     private readonly TaskCompletionSource _ready =
@@ -172,7 +170,6 @@ internal sealed class MainForm : Form, IAutomationTarget
         Controls.Add(_toolbar);
         Controls.Add(_tabStrip);
 
-        _statusBar.EconomyToggled += (_, _) => ToggleEconomy();
 
         _back.Click += (_, _) => ActiveView?.GoBack();
         _forward.Click += (_, _) => ActiveView?.GoForward();
@@ -619,10 +616,6 @@ internal sealed class MainForm : Form, IAutomationTarget
     }
 
     /// <summary>
-    /// Leva a aba ativa para o endereco. Sem aba aberta, abre uma -- o unico
-    /// caso em que clicar num favorito cria aba.
-    /// </summary>
-    /// <summary>
     /// Liga ou desliga a barra de status. O medidor so roda enquanto ela
     /// estiver na tela -- com a barra escondida, ninguem veria o numero e a
     /// medicao seria CPU jogada fora.
@@ -631,7 +624,6 @@ internal sealed class MainForm : Form, IAutomationTarget
     {
         _showStatusBar = show;
         _statusBar.Visible = show;
-        _statusBar.Economy = _hibernateMinutes > 0;
 
         if (show)
         {
@@ -644,29 +636,9 @@ internal sealed class MainForm : Form, IAutomationTarget
     }
 
     /// <summary>
-    /// O chip do rodape liga e desliga a hibernacao. Desligar guarda o valor
-    /// anterior para que religar devolva o mesmo limiar, em vez de cair no
-    /// padrao e mudar o comportamento sem avisar.
+    /// Leva a aba ativa para o endereco. Sem aba aberta, abre uma -- o unico
+    /// caso em que clicar num favorito cria aba.
     /// </summary>
-    private void ToggleEconomy()
-    {
-        if (_hibernateMinutes > 0)
-        {
-            _lastEconomyMinutes = _hibernateMinutes;
-            ApplyHibernateMinutes(0);
-            return;
-        }
-
-        ApplyHibernateMinutes(_lastEconomyMinutes);
-    }
-
-    private void ApplyHibernateMinutes(int minutes)
-    {
-        _hibernateMinutes = minutes;
-        _hibernationPolicy = new HibernationPolicy(TimeSpan.FromMinutes(minutes), _neverHibernate);
-        _statusBar.Economy = minutes > 0;
-        ScheduleSave();
-    }
 
     private void NavigateActive(string url)
     {
@@ -910,7 +882,6 @@ internal sealed class MainForm : Form, IAutomationTarget
 
                 // Troca a politica na hora: o servico le por funcao a cada tique.
                 _hibernationPolicy = new HibernationPolicy(TimeSpan.FromMinutes(minutes), _neverHibernate);
-                _statusBar.Economy = minutes > 0;
                 ScheduleSave();
             },
             () => _showStatusBar,

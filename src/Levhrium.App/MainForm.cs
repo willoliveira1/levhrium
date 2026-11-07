@@ -52,6 +52,7 @@ internal sealed class MainForm : Form, IAutomationTarget
     private readonly IconButton _libraryButton;
     private readonly IconButton _settingsButton;
     private readonly AddressBar _address;
+    private readonly SuggestionPopup _suggestions = new();
     private readonly Panel _content;
 
     private readonly TaskCompletionSource _ready =
@@ -112,6 +113,20 @@ internal sealed class MainForm : Form, IAutomationTarget
 
         _address = new AddressBar();
         _address.Submitted += OnAddressKeyDown;
+        _address.Typed += OnAddressTyped;
+        _address.EditingEnded += (_, _) => _suggestions.Dismiss();
+
+        _suggestions.Chosen += (_, url) =>
+        {
+            _suggestions.Dismiss();
+            NavigateActive(url);
+            ActiveView?.View.Focus();
+        };
+
+        // A lista fica ancorada em coordenadas de tela: mexer a janela a
+        // deixaria para tras.
+        Move += (_, _) => _suggestions.Dismiss();
+        Resize += (_, _) => _suggestions.Dismiss();
         _address.BookmarkClicked += (_, _) => ToggleBookmark();
 
         _toolbar = new Panel
@@ -585,8 +600,63 @@ internal sealed class MainForm : Form, IAutomationTarget
         _address.Width = Math.Max(140, _libraryButton.Left - 6 - left);
     }
 
+    /// <summary>
+    /// Leva a aba ativa para o endereco. Sem aba aberta, abre uma -- o unico
+    /// caso em que clicar num favorito cria aba.
+    /// </summary>
+    private void NavigateActive(string url)
+    {
+        if (ActiveView is { } view)
+        {
+            view.Navigate(UrlResolver.Resolve(url, _searchEngine));
+            return;
+        }
+
+        _ = OpenTabAsync(ContainerRegistry.DefaultName, url);
+    }
+
+    /// <summary>
+    /// Monta as sugestoes a cada tecla. Historico e favoritos saem daqui ja
+    /// filtrados e sem repetir endereco; a conta mora no nucleo.
+    /// </summary>
+    private void OnAddressTyped(object? sender, EventArgs e)
+    {
+        var historico = _library.History.Select(h => new LibraryEntry
+        {
+            Title = h.Title,
+            Url = h.Url,
+            VisitedAt = h.VisitedAt,
+        });
+
+        var favoritos = _library.Bookmarks.Select(b => new LibraryEntry
+        {
+            Title = b.Title,
+            Url = b.Url,
+        });
+
+        _suggestions.SetItems(
+            LibrarySearch.Suggest(historico, favoritos, _address.InputText),
+            _address.ScreenBounds);
+    }
+
     private void OnAddressKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.KeyCode == Keys.Escape)
+        {
+            _suggestions.Dismiss();
+            return;
+        }
+
+        // As setas andam pela lista em vez de mover o cursor no texto -- mas
+        // so quando ha lista aberta, senao tirariam o cursor do lugar.
+        if (e.KeyCode is Keys.Down or Keys.Up &&
+            _suggestions.MoveSelection(e.KeyCode == Keys.Down ? 1 : -1))
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            return;
+        }
+
         if (e.KeyCode != Keys.Enter)
         {
             return;
@@ -595,7 +665,12 @@ internal sealed class MainForm : Form, IAutomationTarget
         e.Handled = true;
         e.SuppressKeyPress = true;
 
-        ActiveView?.Navigate(UrlResolver.Resolve(_address.Address, _searchEngine));
+        // Enter sem nada destacado navega para o que foi digitado, nao para o
+        // primeiro palpite: seria desconcertante ir parar noutro site.
+        var alvo = _suggestions.Current?.Url ?? _address.Address;
+        _suggestions.Dismiss();
+
+        ActiveView?.Navigate(UrlResolver.Resolve(alvo, _searchEngine));
         ActiveView?.View.Focus();
     }
 
@@ -725,7 +800,9 @@ internal sealed class MainForm : Form, IAutomationTarget
     {
         var panel = new LibraryPanel(section, Load);
 
-        panel.ItemChosen += (_, url) => _ = OpenTabAsync(ContainerRegistry.DefaultName, url);
+        // Na aba atual, nao numa nova: abrir favorito e trocar de pagina, e
+        // acumular aba a cada clique era justamente o que cansava.
+        panel.ItemChosen += (_, url) => NavigateActive(url);
         panel.SettingsRequested += (_, _) => ShowSettings();
 
         // Ancorado pela direita do botao, sem passar da borda da tela.
@@ -741,7 +818,14 @@ internal sealed class MainForm : Form, IAutomationTarget
         IReadOnlyList<LibraryEntry> Load(LibrarySection pedida) => pedida switch
         {
             LibrarySection.History =>
-                [.. _library.History.Select(h => new LibraryEntry { Title = h.Title, Url = h.Url })],
+            [
+                .. _library.History.Select(h => new LibraryEntry
+                {
+                    Title = h.Title,
+                    Url = h.Url,
+                    VisitedAt = h.VisitedAt,
+                }),
+            ],
             LibrarySection.Downloads =>
                 [.. _library.Downloads.Select(d => new LibraryEntry { Title = d.FileName, Url = d.Url })],
             _ =>
@@ -812,6 +896,8 @@ internal sealed class MainForm : Form, IAutomationTarget
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        _suggestions.Dispose();
+
         // Grava na saida sem esperar o atraso: fechar nao pode perder a sessao.
         _saveTimer.Stop();
         SaveState();

@@ -364,13 +364,35 @@ internal sealed class LibraryPanel : Form
 
             DrawBadge(g, meio);
 
+            // O horario sai primeiro: e ele que define onde o titulo precisa
+            // ser cortado.
+            var reservado = 10;
+
+            if (_entry.VisitedAt is { } quando)
+            {
+                using var fonteHora = new Font("Segoe UI", 8f);
+
+                var texto = RelativeTime.Describe(quando, DateTimeOffset.UtcNow);
+                var largura = TextRenderer.MeasureText(g, texto, fonteHora).Width + 4;
+
+                TextRenderer.DrawText(
+                    g,
+                    texto,
+                    fonteHora,
+                    new Rectangle(Width - largura - 10, 0, largura, Height),
+                    Theme.ForegroundFaint,
+                    TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+
+                reservado += largura;
+            }
+
             using var titulo = new Font("Segoe UI", 9.5f);
 
             TextRenderer.DrawText(
                 g,
                 _entry.Title,
                 titulo,
-                new Rectangle(42, temHost ? 5 : 0, Width - 52, temHost ? 16 : Height),
+                new Rectangle(42, temHost ? 5 : 0, Width - 42 - reservado, temHost ? 16 : Height),
                 Theme.Foreground,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis |
                 TextFormatFlags.NoPrefix);
@@ -387,7 +409,7 @@ internal sealed class LibraryPanel : Form
                 _entry.Host,
                 host,
                 new Rectangle(42, 21, Width - 52, 14),
-                Theme.ForegroundFaint,
+                Theme.CardSubtitle,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis |
                 TextFormatFlags.NoPrefix);
         }

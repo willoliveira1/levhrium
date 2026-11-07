@@ -98,11 +98,21 @@ internal static class Program
 
         var panel = new LibraryPanel(LibrarySection.Bookmarks, Load);
 
+        // A lista de sugestoes entra no mesmo preview: ela usa flags de janela
+        // delicadas (sem ativacao) e vale ver desenhada antes de publicar.
+        var sugestoes = new SuggestionPopup();
+
         host.Shown += (_, _) =>
         {
             panel.Location = new Point(host.Left + 30, host.Top + 40);
             panel.Show(host);
+
+            sugestoes.SetItems(
+                LibrarySearch.Suggest(Load(LibrarySection.History), Load(LibrarySection.Bookmarks), "test"),
+                new Rectangle(host.Left + 440, host.Top + 40, 420, 30));
         };
+
+        host.FormClosed += (_, _) => sugestoes.Dispose();
 
         Application.Run(host);
     }

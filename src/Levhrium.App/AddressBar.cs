@@ -24,6 +24,9 @@ internal sealed class AddressBar : Control
     private bool _secure;
     private bool _editing;
 
+    /// <summary>Verdadeiro enquanto o codigo escreve no campo, nao o usuario.</summary>
+    private bool _silent;
+
     internal AddressBar()
     {
         BackColor = Theme.ToolbarBackground;
@@ -58,9 +61,18 @@ internal sealed class AddressBar : Control
             _editing = false;
             _input.Visible = false;
             Invalidate();
+            EditingEnded?.Invoke(this, EventArgs.Empty);
         };
 
         _input.KeyDown += (s, e) => Submitted?.Invoke(this, e);
+
+        _input.TextChanged += (_, _) =>
+        {
+            if (_editing && !_silent)
+            {
+                Typed?.Invoke(this, EventArgs.Empty);
+            }
+        };
 
         _bookmark = new IconButton(Glyphs.Star, "Favoritar (Ctrl+D)", 24)
         {
@@ -87,6 +99,12 @@ internal sealed class AddressBar : Control
     internal event KeyEventHandler? Submitted;
 
     internal event EventHandler? BookmarkClicked;
+
+    /// <summary>O usuario digitou. Nao dispara quando o codigo escreve.</summary>
+    internal event EventHandler? Typed;
+
+    /// <summary>O campo perdeu o foco; quem mostra sugestoes deve fecha-las.</summary>
+    internal event EventHandler? EditingEnded;
 
     /// <summary>Texto cru do campo, que é o que a automação lê.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(
@@ -147,6 +165,33 @@ internal sealed class AddressBar : Control
     }
 
     internal void ClearModified() => _input.Modified = false;
+
+    /// <summary>
+    /// Escreve no campo sem disparar <see cref="Typed"/>. E o que permite
+    /// aceitar uma sugestao sem que a escrita gere outra rodada de sugestoes.
+    /// </summary>
+    internal void SetInputText(string text)
+    {
+        _silent = true;
+
+        try
+        {
+            _input.Text = text;
+            _input.SelectionStart = _input.TextLength;
+            _input.SelectionLength = 0;
+        }
+        finally
+        {
+            _silent = false;
+        }
+    }
+
+    /// <summary>Texto cru do campo, do jeito que foi digitado.</summary>
+    internal string InputText => _input.Text;
+
+    /// <summary>A pilula em coordenadas de tela, para ancorar as sugestoes.</summary>
+    internal Rectangle ScreenBounds => new(PointToScreen(Point.Empty), Size);
+
 
     protected override void OnResize(EventArgs e)
     {

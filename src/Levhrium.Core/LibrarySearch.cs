@@ -13,6 +13,13 @@ public sealed record LibraryEntry
 
     public required string Url { get; init; }
 
+    /// <summary>
+    /// Quando o item foi visitado. Nulo em favoritos, que nao guardam hora --
+    /// so o historico tem essa informacao, e e justamente ela que diz se a
+    /// pagina e de agora ou da semana passada.
+    /// </summary>
+    public DateTimeOffset? VisitedAt { get; init; }
+
     /// <summary>Host sem "www.", ou o proprio endereco quando nao der para ler.</summary>
     public string Host => HostOf(Url);
 
@@ -79,7 +86,102 @@ public static class LibrarySearch
         return [.. filtered.Take(Math.Max(0, limit))];
     }
 
+    /// <summary>
+    /// Sugestoes para a barra de endereco: historico e favoritos no mesmo
+    /// bolo, sem repetir endereco.
+    ///
+    /// O historico vem primeiro porque o que voce acabou de visitar e quase
+    /// sempre para onde quer voltar. Um endereco que esta nos dois aparece uma
+    /// vez so, marcado como favorito -- ver duas linhas iguais faria duvidar
+    /// se sao a mesma pagina.
+    ///
+    /// Busca vazia devolve nada: a lista so aparece quando se digita algo, se
+    /// nao ela abriria sozinha ao clicar na barra.
+    /// </summary>
+    public static IReadOnlyList<LibraryEntry> Suggest(
+        IEnumerable<LibraryEntry> history,
+        IEnumerable<LibraryEntry> bookmarks,
+        string? query,
+        int limit = 8)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        ArgumentNullException.ThrowIfNull(bookmarks);
+
+        if (query?.Trim() is not { Length: > 0 } term)
+        {
+            return [];
+        }
+
+        var vistos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var resultado = new List<LibraryEntry>();
+
+        foreach (var entry in history.Concat(bookmarks))
+        {
+            if (resultado.Count >= limit)
+            {
+                break;
+            }
+
+            if (!Matches(entry, term) || !vistos.Add(Key(entry.Url)))
+            {
+                continue;
+            }
+
+            resultado.Add(entry);
+        }
+
+        return resultado;
+    }
+
+    /// <summary>Barra final nao faz diferenca: /um e /um/ sao a mesma pagina.</summary>
+    private static string Key(string url) => url.TrimEnd('/');
+
     private static bool Matches(LibraryEntry entry, string term) =>
         entry.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
         entry.Url.Contains(term, StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// "ha 5 min", "ontem", "12 de nov". Fica no nucleo para ser testavel com um
+/// relogio fixo: data relativa e o tipo de conta que so quebra na virada do
+/// dia, quando ninguem esta olhando.
+/// </summary>
+public static class RelativeTime
+{
+    private static readonly System.Globalization.CultureInfo Brasil =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+
+    public static string Describe(DateTimeOffset when, DateTimeOffset now)
+    {
+        var delta = now - when;
+
+        // Relogio do sistema atrasado, ou registro gravado adiante: tratar
+        // como agora e menos errado do que dizer "ha -3 min".
+        if (delta < TimeSpan.Zero || delta.TotalMinutes < 1)
+        {
+            return "agora";
+        }
+
+        if (delta.TotalMinutes < 60)
+        {
+            return $"ha {(int)delta.TotalMinutes} min";
+        }
+
+        if (delta.TotalHours < 24)
+        {
+            return $"ha {(int)delta.TotalHours} h";
+        }
+
+        if (delta.TotalDays < 2)
+        {
+            return "ontem";
+        }
+
+        if (delta.TotalDays < 7)
+        {
+            return $"ha {(int)delta.TotalDays} dias";
+        }
+
+        return when.ToLocalTime().ToString("d MMM", Brasil);
+    }
 }

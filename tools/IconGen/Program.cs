@@ -16,26 +16,59 @@ namespace IconGen;
 /// Uso:
 ///   IconGen de-origem.png pasta-destino [estilo]
 ///   IconGen de-origem.png pasta-destino variants   (gera uma amostra de cada estilo)
+///
+/// Com --gradiente #RRGGBB #RRGGBB o gradiente vem da linha de comando em vez
+/// do PNG de origem, para trocar a cor sem precisar de outra imagem.
 /// </summary>
 internal static class Program
 {
     private static void Main(string[] args)
     {
-        if (args.Length < 2)
+        var positional = new List<string>();
+        Color? gradientTop = null;
+        Color? gradientBottom = null;
+
+        for (var i = 0; i < args.Length; i++)
         {
-            Console.Error.WriteLine("Uso: IconGen <origem.png> <pasta-destino> [estilo|variants]");
+            if (!args[i].Equals("--gradiente", StringComparison.OrdinalIgnoreCase))
+            {
+                positional.Add(args[i]);
+                continue;
+            }
+
+            if (i + 2 >= args.Length)
+            {
+                Console.Error.WriteLine("--gradiente precisa de duas cores: topo e base.");
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            gradientTop = ParseHex(args[i + 1]);
+            gradientBottom = ParseHex(args[i + 2]);
+            i += 2;
+        }
+
+        if (positional.Count < 2)
+        {
+            Console.Error.WriteLine(
+                "Uso: IconGen <origem.png> <pasta-destino> [estilo|variants] [--gradiente <topo> <base>]");
             Environment.ExitCode = 1;
             return;
         }
 
-        var source = args[0];
-        var outputDirectory = args[1];
-        var variant = args.Length > 2 ? args[2] : "1-branco-grande";
+        var source = positional[0];
+        var outputDirectory = positional[1];
+        var variant = positional.Count > 2 ? positional[2] : "1-branco-grande";
 
         Directory.CreateDirectory(outputDirectory);
 
         using var original = new Bitmap(source);
         var shape = PickShape.Extract(original);
+
+        if (gradientTop is { } top && gradientBottom is { } bottom)
+        {
+            shape = shape.WithGradient(top, bottom);
+        }
 
         Console.WriteLine($"palheta: {shape.Width}x{shape.Height}");
         Console.WriteLine($"gradiente: {Hex(shape.TopColor)} -> {Hex(shape.BottomColor)}");
@@ -65,6 +98,16 @@ internal static class Program
     }
 
     private static string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    private static Color ParseHex(string value)
+    {
+        var digits = value.TrimStart('#');
+        return Color.FromArgb(
+            255,
+            Convert.ToInt32(digits.Substring(0, 2), 16),
+            Convert.ToInt32(digits.Substring(2, 2), 16),
+            Convert.ToInt32(digits.Substring(4, 2), 16));
+    }
 
     /// <summary>
     /// Desenha o icone no tamanho pedido. Renderiza grande e reduz com
@@ -469,14 +512,18 @@ internal sealed class PickShape
             }
         }
 
-        // Media dos pixels azuis de cada faixa, nao um pixel so: os detalhes
+        // Media dos pixels coloridos de cada faixa, nao um pixel so: os detalhes
         // escuros correm pelo meio e uma amostra pontual cairia neles.
-        var top = AverageBlue(pixels, stride, pick, minX, minY, pickWidth, pickHeight, 0.06, 0.16);
-        var bottom = AverageBlue(pixels, stride, pick, minX, minY, pickWidth, pickHeight, 0.80, 0.90);
+        var top = AverageTint(pixels, stride, pick, minX, minY, pickWidth, pickHeight, 0.06, 0.16);
+        var bottom = AverageTint(pixels, stride, pick, minX, minY, pickWidth, pickHeight, 0.80, 0.90);
         var detail = FindDarkestInside(pixels, stride, pick, minX, minY, pickWidth, pickHeight);
 
         return new PickShape(mask, pickWidth, pickHeight, top, bottom, detail);
     }
+
+    /// <summary>A mesma silhueta com outro gradiente, para trocar a cor sem outro PNG de origem.</summary>
+    public PickShape WithGradient(Color top, Color bottom) =>
+        new(_mask, Width, Height, top, bottom, DetailColor);
 
     /// <summary>A silhueta no tamanho original, preenchida com o gradiente vertical.</summary>
     public Bitmap ToBitmap()
@@ -676,10 +723,11 @@ internal sealed class PickShape
     }
 
     /// <summary>
-    /// Cor media dos pixels claramente azuis (B bem acima de R) numa faixa
-    /// horizontal da figura, dada em fracao da altura.
+    /// Cor media dos pixels coloridos numa faixa horizontal da figura, dada em
+    /// fracao da altura. O criterio e a saturacao, nao o matiz: assim a amostra
+    /// funciona com a palheta de qualquer cor.
     /// </summary>
-    private static Color AverageBlue(
+    private static Color AverageTint(
         byte[] pixels,
         int stride,
         bool[,] pick,
@@ -705,7 +753,12 @@ internal sealed class PickShape
 
                 var color = GetColor(pixels, stride, minX + x, minY + y);
 
-                if (color.B - color.R < 40)
+                // Os detalhes escuros sao quase cinzentos; so entram na media
+                // os pixels com cor de verdade.
+                var chroma = Math.Max(color.R, Math.Max(color.G, color.B)) -
+                             Math.Min(color.R, Math.Min(color.G, color.B));
+
+                if (chroma < 40)
                 {
                     continue;
                 }

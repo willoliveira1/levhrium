@@ -72,8 +72,24 @@ Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 Filename: "{app}\{#AppExe}"; Description: "Abrir o {#AppName}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+const
+  { SHCNE_ASSOCCHANGED com SHCNF_IDLIST: manda o Explorer reler os icones. Sem
+    isto, quem ja tinha o Levhrium fixado na barra de tarefas continua vendo o
+    icone da versao anterior, servido do cache do shell. }
+  SHCNE_ASSOCCHANGED = $08000000;
+  SHCNF_IDLIST = $0000;
+
 var
   DownloadPage: TDownloadWizardPage;
+
+procedure SHChangeNotify(wEventId: Integer; uFlags: Cardinal; dwItem1, dwItem2: Cardinal);
+  external 'SHChangeNotify@shell32.dll stdcall';
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, 0, 0);
+end;
 
 { O Levhrium usa o runtime WebView2 do sistema. Sem ele o navegador nao abre,
   entao o instalador cuida disso em vez de deixar o erro para o usuario. }

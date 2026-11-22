@@ -138,6 +138,11 @@ internal sealed class UpdateService : IDisposable
 
         RecordInstalledVersion(prepared.Version);
 
+        // O executavel no disco ja e o novo, entao o shell releu o icone certo.
+        // Sem isto o atalho fixado na barra de tarefas fica com o icone da
+        // versao anterior ate o Explorer reiniciar.
+        NativeShell.RefreshIconCache();
+
         try
         {
             Directory.Delete(prepared.StagingFolder, recursive: true);
